@@ -36,7 +36,7 @@ func run(ctx context.Context) (err error) {
 
 	flag.Parse()
 
-	media, err := warp.NewMedia(*dash)
+	media, err := warp.NewMedia(*dash, *isStreaming)
 	if err != nil {
 		return fmt.Errorf("failed to open media: %w", err)
 	}
