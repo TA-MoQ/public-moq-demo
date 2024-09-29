@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
 	"io"
 	"log"
 	"math"
 	"time"
+
+	"github.com/TugasAkhir-QUIC/webtransport-go"
 
 	"github.com/TugasAkhir-QUIC/quic-go"
 	"github.com/kixelated/invoker"
@@ -400,7 +401,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx)
+		buf, err := segment.Read(ctx, !s.server.isStreaming)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
@@ -509,7 +510,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx)
+		buf, err := segment.Read(ctx, !s.server.isStreaming)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
@@ -650,7 +651,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx)
+		buf, err := segment.Read(ctx, !s.server.isStreaming)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {

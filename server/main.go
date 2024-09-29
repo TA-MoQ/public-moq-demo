@@ -5,9 +5,10 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"log"
+
 	"github.com/kixelated/invoker"
 	"github.com/kixelated/warp-demo/server/internal/warp"
-	"log"
 )
 
 func main() {
@@ -31,6 +32,8 @@ func run(ctx context.Context) (err error) {
 	dash := flag.String("dash", "../media/playlist.mpd", "DASH playlist path")
 	//dash := flag.String("dash", "C:/Users/Farrel/Documents/Kuliah/SEM-8/Tugas Akhir/Repositories/test-av1/playlist.mpd", "DASH playlist path")
 
+	isStreaming := flag.Bool("streaming", false, "If the dash file meant for streaming")
+
 	flag.Parse()
 
 	media, err := warp.NewMedia(*dash)
@@ -44,9 +47,10 @@ func run(ctx context.Context) (err error) {
 	}
 
 	config := warp.ServerConfig{
-		Addr:   *addr,
-		Cert:   &tlsCert,
-		LogDir: *logDir,
+		Addr:        *addr,
+		Cert:        &tlsCert,
+		LogDir:      *logDir,
+		IsStreaming: *isStreaming,
 	}
 
 	ws, err := warp.NewServer(config, media)

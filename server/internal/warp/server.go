@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/TugasAkhir-QUIC/quic-go"
-	"github.com/TugasAkhir-QUIC/quic-go/logging"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -13,6 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/TugasAkhir-QUIC/quic-go"
+	"github.com/TugasAkhir-QUIC/quic-go/logging"
 
 	"github.com/TugasAkhir-QUIC/quic-go/http3"
 	"github.com/TugasAkhir-QUIC/webtransport-go"
@@ -32,18 +33,23 @@ type Server struct {
 	isTcActive        bool
 	continueStreaming bool
 
+	// Whether the DASH file is for streaming or not
+	isStreaming bool
+
 	sessions invoker.Tasks
 }
 
 type ServerConfig struct {
-	Addr   string
-	Cert   *tls.Certificate
-	LogDir string
+	Addr        string
+	Cert        *tls.Certificate
+	LogDir      string
+	IsStreaming bool
 }
 
 func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	s = new(Server)
 
+	s.isStreaming = config.IsStreaming
 	s.continueStreaming = true
 	s.tcRate = -1
 

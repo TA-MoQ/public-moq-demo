@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -116,6 +117,23 @@ func (m *Media) Start(bitrate func() uint64) (inits map[string]*MediaInit, audio
 	return m.inits, audio, video, nil
 }
 
+func findLatestSequence(dir fs.FS) (int, error) {
+	matches, _ := fs.Glob(dir, "chunk-stream*.m4s")
+	largest := -1
+	for _, match := range matches {
+		id, err := strconv.Atoi(strings.TrimSuffix(strings.TrimLeft(strings.Split(match, "-")[2], "0"), ".m4s"))
+		if err == nil && id > largest {
+			largest = id
+		}
+	}
+
+	if largest == -1 {
+		return -1, errors.New("couldn't find latest sequence")
+	}
+
+	return largest, nil
+}
+
 type MediaStream struct {
 	Media *Media
 
@@ -131,6 +149,12 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 	ms.reps = reps
 	ms.start = start
 	ms.bitrate = bitrate
+	latestSequence, err := findLatestSequence(m.base)
+	if err != nil {
+		fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
+	} else {
+		ms.sequence = max(latestSequence-3, 1)
+	}
 	return ms, nil
 }
 
@@ -183,13 +207,33 @@ func (ms *MediaStream) Next(ctx context.Context, session *Session, timeOffset ti
 	path = strings.ReplaceAll(path, "$RepresentationID$", *rep.ID)
 	path = strings.ReplaceAll(path, "$Number%05d$", fmt.Sprintf("%05d", sequence)) // TODO TODO
 
-	// Try openning the file
-	f, err := ms.Media.base.Open(path)
-	if errors.Is(err, os.ErrNotExist) && ms.sequence != 0 {
-		// Return EOF if the next file is missing
-		return nil, nil
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to open segment file: %w", err)
+	// This loop is there for actual live stream purposes, if there's no more
+	// segment that shows up after 1 minute, assume the streamer has either ended
+	// the stream, or got disconnected
+	start := time.Now()
+	var f fs.File
+	for {
+		// Try openning the file
+		mediaFile, err := ms.Media.base.Open(path)
+		if err == nil {
+			f = mediaFile
+			break
+		}
+
+		var errorMsg error
+		if errors.Is(err, os.ErrNotExist) && ms.sequence != 0 {
+			if session.server.isStreaming {
+				errorMsg = fmt.Errorf("timed out, disconnected?")
+			} else {
+				errorMsg = fmt.Errorf("EOF")
+			}
+		} else {
+			errorMsg = fmt.Errorf("failed to open segment file: %w", err)
+		}
+
+		if time.Since(start) >= 1*time.Minute || !session.server.isStreaming {
+			return nil, errorMsg
+		}
 	}
 
 	duration := time.Duration(*rep.SegmentTemplate.Duration) / time.Nanosecond
@@ -281,7 +325,7 @@ func newMediaSegment(s *MediaStream, init *MediaInit, file fs.File, timestamp ti
 }
 
 // Return the next atom, sleeping based on the PTS to simulate a live stream
-func (ms *MediaSegment) Read(ctx context.Context) (chunk []byte, err error) {
+func (ms *MediaSegment) Read(ctx context.Context, shouldDelay bool) (chunk []byte, err error) {
 	// Read the next top-level box
 	var header [8]byte
 
@@ -308,7 +352,7 @@ func (ms *MediaSegment) Read(ctx context.Context) (chunk []byte, err error) {
 		return nil, fmt.Errorf("failed to parse atom: %w", err)
 	}
 
-	if sample != nil {
+	if shouldDelay && sample != nil {
 		// Simulate a live stream by sleeping before we write this sample.
 		// Figure out how much time has elapsed since the start
 		elapsed := time.Since(ms.Stream.start)
