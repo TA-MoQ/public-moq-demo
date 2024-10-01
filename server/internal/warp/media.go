@@ -22,14 +22,16 @@ import (
 // This is a demo; you should actually fetch media from a live backend.
 // It's just much easier to read from disk and "fake" being live.
 type Media struct {
-	base  fs.FS
-	inits map[string]*MediaInit
-	video []*mpd.Representation
-	audio []*mpd.Representation
+	base        fs.FS
+	inits       map[string]*MediaInit
+	video       []*mpd.Representation
+	audio       []*mpd.Representation
+	isStreaming bool
 }
 
-func NewMedia(playlistPath string) (m *Media, err error) {
+func NewMedia(playlistPath string, isStreaming bool) (m *Media, err error) {
 	m = new(Media)
+	m.isStreaming = isStreaming
 
 	// Create a fs.FS out of the folder holding the playlist
 	m.base = os.DirFS(filepath.Dir(playlistPath))
@@ -149,11 +151,13 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 	ms.reps = reps
 	ms.start = start
 	ms.bitrate = bitrate
-	latestSequence, err := findLatestSequence(m.base)
-	if err != nil {
-		fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
-	} else {
-		ms.sequence = max(latestSequence-3, 1)
+	if m.isStreaming {
+		latestSequence, err := findLatestSequence(m.base)
+		if err != nil {
+			fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
+		} else {
+			ms.sequence = max(latestSequence-3, 1)
+		}
 	}
 	return ms, nil
 }
