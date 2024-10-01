@@ -3,11 +3,12 @@ input_file="source.mp4"
 segment_duration=2
 chunk_duration=0.04
 fps=25
+dir=${1:-'.'}
 
 pkill ffmpeg
-rm -f *.m4s
-rm -f *.tmp
-rm playlist.mpd
+rm -f "$dir/*.m4s"
+rm -f "$dir/*.tmp"
+rm "$dir/playlist.mpd"
 
 
 ffmpeg -listen 1 -i rtmp://0.0.0.0:1935/live/app \
@@ -28,5 +29,5 @@ ffmpeg -listen 1 -i rtmp://0.0.0.0:1935/live/app \
     -use_timeline 0 \
     -seg_duration $segment_duration -frag_duration $chunk_duration \
     -frag_type duration \
-    playlist.mpd
+    "$dir/playlist.mpd"
 
