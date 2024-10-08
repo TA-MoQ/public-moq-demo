@@ -29,5 +29,6 @@ ffmpeg -listen 1 -i rtmp://0.0.0.0:1935/live/app \
     -use_timeline 0 \
     -seg_duration $segment_duration -frag_duration $chunk_duration \
     -frag_type duration \
+    -loglevel error \
     "$dir/playlist.mpd"
 

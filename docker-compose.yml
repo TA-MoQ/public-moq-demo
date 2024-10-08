@@ -1,0 +1,23 @@
+services:
+  media:
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+      tags:
+        - "quic-media:media"
+    volumes:
+      - ./cert:/certs
+    ports:
+      - "1935:1935"
+      - "4443:4443/udp"
+  streaming:
+    build:
+      context: .
+      dockerfile: Dockerfile.streaming
+      tags:
+        - "quic-media:streaming"
+    volumes:
+      - ./cert:/certs
+    ports:
+      - "1935:1935"
+      - "4443:4443/udp"
