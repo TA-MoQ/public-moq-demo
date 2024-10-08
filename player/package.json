@@ -2,11 +2,13 @@
   "source": "src/index.html",
   "scripts": {
     "prodtest": "parcel serve --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem",
-    "localtest": "parcel serve --https --cert ../cert/localhost.crt --key ../cert/localhost.key",
+    "localtest": "parcel serve --https --cert ./cert/localhost.crt --key ./cert/localhost.pem",
     "build": "parcel build src/index.html --no-optimize src/appsettings.js",
     "check": "tsc --noEmit"
   },
   "devDependencies": {
+    "@parcel/packager-raw-url": "^2.8.2",
+    "@parcel/transformer-webmanifest": "^2.8.2",
     "@parcel/validator-typescript": "^2.6.0",
     "@types/node": "^18.11.18",
     "@types/plotly.js-dist": "npm:@types/plotly.js",

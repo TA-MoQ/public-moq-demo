@@ -1,0 +1,17 @@
+{
+    "name": "MOQ - WARP Test Bed v1.1",
+    "short_name": "WARP",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#131b30",
+    "theme_color": "#131b30",
+    "description": "Implementation of WARP (Media over QUIC prototype) with QUIC Stream and Datagram",
+    "icons": [
+      {
+        "src": "./assets/github-mark-white.svg",
+        "sizes": "192x192",
+        "type": "image/svg+xml"
+      }
+    ]
+  }
+  
