@@ -1,4 +1,14 @@
 services:
+  frontend:
+    build:
+      context: player
+      dockerfile: Dockerfile
+      tags:
+        - "quic-media-frontend:latest"
+    volumes:
+      - ./cert:/certs
+    ports:
+      - "1234:1234"
   media:
     build:
       context: .
