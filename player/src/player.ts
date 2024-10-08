@@ -96,8 +96,8 @@ export class Player {
 		this.vidRef.src = URL.createObjectURL(this.mediaSource)
 		this.ipaddr = "";
 		this.init = new Map()
-		this.audio = new Track(new Source(this.mediaSource));
-		this.video = new Track(new Source(this.mediaSource));
+		this.audio = new Track(new Source(this.mediaSource), "audio");
+		this.video = new Track(new Source(this.mediaSource), "video");
 		this.isAuto = false;
 		this.fragment = new FragmentedMessageHandler();
 		this.currCategory = 'Stream'; //default category

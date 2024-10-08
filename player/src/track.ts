@@ -1,6 +1,7 @@
-import { Source } from "./source"
-import { Segment } from "./segment"
-import { TimeRange } from "./util"
+import { Source } from "./source";
+import { Segment } from "./segment";
+import { TimeRange } from "./util/timerange";
+import { Heap } from "heap-js";
 
 // An audio or video track that consists of multiple sequential segments.
 //
@@ -10,115 +11,131 @@ import { TimeRange } from "./util"
 // Our solution is to flush segments in decode order, buffering a single additional frame.
 // We extend the duration of the buffered frame and flush it to cover any gaps.
 export class Track {
-	source: Source;
-	segments: Segment[];
+  type: "audio" | "video";
+  source: Source;
+  segments: Heap<Segment>;
 
-	constructor(source: Source) {
-		this.source = source;
-		this.segments = [];
-	}
+  constructor(source: Source, type: "audio" | "video") {
+    this.type = type;
+    this.source = source;
+    // Sort by timestamp ascending
+    // NOTE: The timestamp is in milliseconds, and we need to parse the media to get the accurate PTS/DTS.
+    this.segments = new Heap<Segment>(
+      (a: Segment, b: Segment) => a.timestamp - b.timestamp
+    );
+  }
 
-	add(segment: Segment) {
-		// TODO don't add if the segment is out of date already
-		this.segments.push(segment)
+  add(segment: Segment): number {
+    // TODO don't add if the segment is out of date already
+    // asssuming the segment duration is 2s, expired segments are any kth segment where k < t - 1
+    console.debug(
+      `[NEW ${this.type.toUpperCase()} SEGMENT] ${segment.timestamp}`,
+      segment
+    );
 
-		// Sort by timestamp ascending
-		// NOTE: The timestamp is in milliseconds, and we need to parse the media to get the accurate PTS/DTS.
-		this.segments.sort((a: Segment, b: Segment): number => {
-			return a.timestamp - b.timestamp
-		})
-	}
+    this.segments.push(segment);
 
-	buffered(): TimeRanges {
-		let ranges: TimeRange[] = []
+    console.log(
+      `[CURR ${this.type.toUpperCase()} SEGMENTS] length=${
+        this.segments.length
+      }`,
+      this.segments.peek()
+    );
+    return this.segments.length;
+  }
 
-		const buffered = this.source.buffered() as TimeRanges
-		for (let i = 0; i < buffered.length; i += 1) {
-			// Convert the TimeRanges into an oject we can modify
-			ranges.push({
-				start: buffered.start(i),
-				end: buffered.end(i)
-			})
-		}
+  buffered(): TimeRanges {
+    let ranges: TimeRange[] = [];
 
-		// Loop over segments and add in their ranges, merging if possible.
-		for (let segment of this.segments) {
-			const buffered = segment.buffered()
-			if (!buffered) continue;
+    const buffered = this.source.buffered() as TimeRanges;
+    for (let i = 0; i < buffered.length; i += 1) {
+      // Convert the TimeRanges into an oject we can modify
+      ranges.push({
+        start: buffered.start(i),
+        end: buffered.end(i),
+      });
+    }
 
-			if (ranges.length) {
-				// Try to merge with an existing range
-				const last = ranges[ranges.length-1];
-				if (buffered.start < last.start) {
-					// Network buffer is old; ignore it
-					continue
-				}
+    // Loop over segments and add in their ranges, merging if possible.
+    for (let segment of this.segments) {
+      const buffered = segment.buffered();
+      if (!buffered) continue;
 
-				// Extend the end of the last range instead of pushing
-				if (buffered.start <= last.end && buffered.end > last.end) {
-					last.end = buffered.end
-					continue
-				}
-			}
+      if (ranges.length) {
+        // Try to merge with an existing range
+        const last = ranges[ranges.length - 1];
+        if (buffered.start < last.start) {
+          // Network buffer is old; ignore it
+          continue;
+        }
 
-			ranges.push(buffered)
-		}
+        // Extend the end of the last range instead of pushing
+        if (buffered.start <= last.end && buffered.end > last.end) {
+          last.end = buffered.end;
+          continue;
+        }
+      }
 
-		// TODO typescript
-		return {
-			length: ranges.length,
-			start: (x) => { return ranges[x].start },
-			end: (x) => { return ranges[x].end },
-		}
-	}
+      ranges.push(buffered);
+    }
 
-	flush() {
-		while (1) {
-			if (!this.segments.length) break
+    // TODO typescript
+    return {
+      length: ranges.length,
+      start: (x) => {
+        return ranges[x].start;
+      },
+      end: (x) => {
+        return ranges[x].end;
+      },
+    };
+  }
 
-			const first = this.segments[0]
-			const done = first.flush()
-			if (!done) break
+  flush() {
+    while (1) {
+      if (!this.segments.length) break;
 
-			this.segments.shift()
-		}
-	}
+      const first = this.segments.pop();
+      if (!first) break;
+      const done = first.flush();
+      if (!done) break;
+    }
+  }
 
-	// Given the current playhead, determine if we should drop any segments
-	// If playhead is undefined, it means we're buffering so skip to anything now.
-	advance(playhead: number | undefined) {
-		if (this.segments.length < 2) return
+  // Given the current playhead, determine if we should drop any segments
+  // If playhead is undefined, it means we're buffering so skip to anything now.
+  advance(playhead: number | undefined) {
+    if (this.segments.length < 2) return;
 
-		while (this.segments.length > 1) {
-			const current = this.segments[0];
-			const next = this.segments[1];
+    while (this.segments.length > 1) {
+      const [current, next] = this.segments.top(2);
 
-			if (next.dts === undefined || next.timescale == undefined) {
-				// No samples have been parsed for the next segment yet.
-				break
-			}
+      if (next.dts === undefined || next.timescale == undefined) {
+        // No samples have been parsed for the next segment yet.
+        break;
+      }
 
-			if (current.dts === undefined) {
-				// No samples have been parsed for the current segment yet.
-				// We can't cover the gap by extending the sample so we have to seek.
-				// TODO I don't think this can happen, but I guess we have to seek past the gap.
-				break
-			}
+      if (current.dts === undefined) {
+        // No samples have been parsed for the current segment yet.
+        // We can't cover the gap by extending the sample so we have to seek.
+        // TODO I don't think this can happen, but I guess we have to seek past the gap.
+        break;
+      }
 
-			if (playhead !== undefined) {
-				// Check if the next segment has playable media now.
-				// Otherwise give the current segment more time to catch up.
-				if ((next.dts / next.timescale) > playhead) {
-					return
-				}
-			}
+      if (playhead !== undefined) {
+        // Check if the next segment has playable media now.
+        // Otherwise give the current segment more time to catch up.
+        if (next.dts / next.timescale > playhead) {
+          return;
+        }
+      }
 
-			current.skipTo(next.dts || 0) // tell typescript that it's not undefined; we already checked
-			current.finish()
+      current.skipTo(next.dts || 0); // tell typescript that it's not undefined; we already checked
+      current.finish();
 
-			// TODO cancel the QUIC stream to save bandwidth
+      // TODO cancel the QUIC stream to save bandwidth
 
-			this.segments.shift()
-		}
-	}
+      this.segments.pop();
+    }
+  }
 }
