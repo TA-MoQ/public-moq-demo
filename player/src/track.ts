@@ -33,7 +33,10 @@ export class Track {
       segment
     );
 
-    this.segments.push(segment);
+    if (!this.segments.peek() || this.segments.peek()!.timestamp < segment.timestamp){
+
+      this.segments.push(segment);
+    }
 
     console.log(
       `[CURR ${this.type.toUpperCase()} SEGMENTS] length=${
