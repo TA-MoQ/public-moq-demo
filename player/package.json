@@ -3,7 +3,7 @@
   "scripts": {
     "deploy": "parcel serve --cert /certs/cert.pem --key /certs/key.pem",
     "prodtest": "parcel serve --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem",
-    "localtest": "parcel serve --https --cert ../cert/cert.pem --key ../cert/key.pem",
+    "localtest": "parcel serve --https --cert ../cert/localhost.crt --key ../cert/localhost.key",
     "build": "parcel build src/index.html --no-optimize src/appsettings.js",
     "check": "tsc --noEmit"
   },
@@ -13,6 +13,8 @@
     "@types/plotly.js-dist": "npm:@types/plotly.js",
     "buffer": "^5.7.1",
     "parcel": "^2.8.2",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
     "typescript": ">=3.0.0"
   },
   "dependencies": {
