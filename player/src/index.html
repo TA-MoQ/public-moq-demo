@@ -1,33 +1,33 @@
-﻿<script type="module" src="index.ts"></script>
-
+﻿
 <!DOCTYPE html>
 <html>
   <head>
+    <script type="module" src="index.ts"></script>
     <meta charset="UTF-8" />
     <title>WARP</title>
     <link href="https://api.fontshare.com/v2/css?f[]=satoshi@300&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="index.css" type="text/css">
     <link rel="stylesheet" href="player.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="appsettings.js"></script>
   </head>
-  <body>
-    <header>
-      <div class="navbar">
-        <h1>QUIC Testbed</h1>
-        <a href="https://github.com/TugasAkhir-QUIC/public-moq-demo" target="_blank">
+  <body class="bg-slate-900 px-4">
+    <header class="w-full p-4 flex justify-between">
+        <h1 class="text-gray-100 font-semibold text-3xl lg:text-5xl xl:text-7xl">QUIC Testbed</h1>
+        <a class="w-10 h-10 lg:w-16 lg:h-16" href="https://github.com/TugasAkhir-QUIC/public-moq-demo" target="_blank">
           <img src="assets/github-mark-white.svg" class="github_logo" />
         </a>
-      </div>
     </header>
-    <div id="main">
-      <div>
-        <div id="player">
-          <div id="screen">
+    <main id="main w-screen pb-8">
+      <section class="w-full flex flex-col lg:flex-row gap-x-4 gap-y-4">
+        <div id="player w-full">
+          <div id="screen" class="relative lg:w-[50vw]">
             <div id="play"><span>click to play</span></div>
             <video id="vid" controls></video>
           </div>
 
-          <div id="screen_bottom">
-            <div id="controls">
+          
+            <div id="controls" class="flex justify-between w-full">
               <button type="button" id="start">Start</button>
               <button type="button" id="live">Go Live</button>
               <button type="button" id="throttle" style="display: none">Throttle: None</button>
@@ -60,10 +60,9 @@
             >
               <img src="assets/github-mark-white.svg" class="github_logo" />
             </a> -->
-          </div>
         </div>
-        <div id="right_col">
-          <div id="stats">
+        <div id="right_col" class="text-gray-100 w-1/2">
+          <div id="stats" class="text-lg lg:text-xl">
             <label class="audio label">Audio Buffer: <span class="seconds"></span></label>
             <div class="audio buffer">
               <div class="fill"></div>
@@ -95,9 +94,9 @@
           </div>
           <div id="repo_info"></div>
         </div>
-      </div>
+      </section>
       <div class="plots">
-        <div class="grid-plot">
+        <div class="mt-12 grid-plot flex flex-col lg:flex-row justify-center lg:justify-between w-full gap-y-4 px-4 lg:px-0">
           <div id="plot"></div>
           <div id="plot_latency"></div>
           <div id="plot_throughput"></div>
@@ -108,6 +107,6 @@
           <div id="log_content"></div>
         </div>
       </div>
-    </div>
+    </main>
   </body>
 </html>
