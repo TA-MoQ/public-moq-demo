@@ -5,9 +5,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
 	"sync"
 	"sync/atomic"
+
+	"github.com/TA-MoQ/webtransport-go"
 )
 
 // TODO: mulai dari awal untuk setiap koneksi
@@ -29,6 +30,7 @@ type Datagram struct {
 	delayNotify chan struct{}
 	isDelayed   bool
 	mutex       sync.Mutex
+	priority    int
 }
 
 func NewDatagram(inner *webtransport.Session) (d *Datagram) {
@@ -90,7 +92,7 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 				}
 
 				header := d.generateHeader(uint16(i), uint16(totalFragments))
-				err := d.inner.SendDatagram(append(header, chunk[start:end]...))
+				err := d.inner.SendDatagramWithPriority(append(header, chunk[start:end]...), d.priority)
 				//fmt.Println("SENDING DATAGRAM", d.chunkNumber, d.ID)
 				if err != nil {
 					return err
@@ -204,4 +206,12 @@ func (d *Datagram) Close() (err error) {
 	d.notify = make(chan struct{})
 
 	return nil
+}
+
+func (d *Datagram) SetPriority(value int) {
+	d.priority = value
+}
+
+func (d *Datagram) GetPriority() int {
+	return d.priority
 }

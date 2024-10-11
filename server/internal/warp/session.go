@@ -11,9 +11,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/TA-MoQ/webtransport-go"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
+	"github.com/TA-MoQ/quic-go"
 	"github.com/kixelated/invoker"
 )
 
@@ -314,6 +314,7 @@ func (s *Session) writeInit(ctx context.Context, init *MediaInit) (err error) {
 
 func (s *Session) writeInitDatagram(ctx context.Context, init *MediaInit) (err error) {
 	datagram := NewDatagram(s.inner)
+	datagram.SetPriority(math.MaxInt)
 	s.streams.Add(datagram.Run)
 
 	err = datagram.WriteMessage(Message{
@@ -471,6 +472,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	s.streams.Add(datagram.Run)
 
 	ms := int(segment.timestamp / time.Millisecond)
+	datagram.SetPriority(ms)
 	if ms == 0 {
 		datagram.maxSize = 1250
 	}

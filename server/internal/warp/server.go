@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
-	"github.com/TugasAkhir-QUIC/quic-go/logging"
+	"github.com/TA-MoQ/quic-go"
+	"github.com/TA-MoQ/quic-go/logging"
 
-	"github.com/TugasAkhir-QUIC/quic-go/http3"
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/TA-MoQ/quic-go/http3"
+	"github.com/TA-MoQ/webtransport-go"
 	"github.com/kixelated/invoker"
 )
 
