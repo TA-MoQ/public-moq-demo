@@ -534,7 +534,8 @@ export class Player {
 		this.trySeek()
 
 		// Try skipping video if it would fix any desync.
-		this.trySkip()
+		// NOTE: Disabled to simulate actual live streaming conditions
+		// this.trySkip()
 
 		// Update the stats at the end
 		this.updateStats()
