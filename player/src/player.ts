@@ -245,12 +245,14 @@ export class Player {
 			[1, 'Auto (Datagram)'],
 			[2, 'Auto (Hybrid)']
 		]);
-	
+		
+		const prevCategory = this.currCategory
 		this.currCategory = categoryMap.get(categoryNum) || 'Unknown';
 		
-		this.sendMessage({
-			"x-category": { category: categoryNum },
-		});
+		if (prevCategory != this.currCategory)
+			this.sendMessage({
+				"x-category": { category: categoryNum },
+			});
 	};	
 
 	pauseOrResume = (pause?: boolean) => {
