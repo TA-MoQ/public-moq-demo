@@ -98,9 +98,9 @@ export class Player {
 		this.init = new Map()
 		this.audio = new Track(new Source(this.mediaSource), "audio");
 		this.video = new Track(new Source(this.mediaSource), "video");
-		this.isAuto = false;
+		this.isAuto = (this.categoryRef.value === '3');
 		this.fragment = new FragmentedMessageHandler();
-		this.currCategory = 'Stream'; //default category
+		this.currCategory = this.getCategoryLabel(this.categoryRef.value);
 		if (props.autoStart) {
 			this.start();
 		}
@@ -201,73 +201,57 @@ export class Player {
 	};
 
 	categoryChange = () => {
-		console.log('in categoryChange | category: %s', this.categoryRef.value);
-		let currentCategory = this.categoryRef.value;
-		let categoryUsed = '';
-		if (currentCategory != '3'){
-			categoryUsed = currentCategory
-		}
-		let sendMessage = false;
-		let sendAuto = false;
-		//check if category is 0 for streams, 1 for datagrams, 2 Partially Reliable, 3 Auto switch between streams and datagrams.
-		if (currentCategory === '0') {
-			sendMessage = true;
-			sendAuto = false;
-			this.currCategory = 'Stream';
-		} else if (currentCategory === '1') {
-			sendMessage = true;
-			sendAuto = false;
-			this.currCategory = 'Datagram';
-		} else if (currentCategory === '2') {
-			sendMessage = true;
-			sendAuto = false;
-			this.currCategory = 'Hybrid';
-		} else if(currentCategory === '3') {
-			sendMessage = true;
-			sendAuto = true;
-		}
-		this.isAuto = sendAuto;
-		//change to int of currentCategory
-		let numCategory = parseInt(categoryUsed);
-
+		const currentCategory = this.categoryRef.value;
+		console.log('in categoryChange | category: %s', currentCategory);
+	
+		const isAutoSwitch = currentCategory === '3';
+		const sendMessage = currentCategory !== '';
+		let numCategory = isAutoSwitch ? 0 : parseInt(currentCategory);  // Defaults to 0 for auto-switching
+	
 		if (sendMessage) {
-			//NOTIFIES SERVER THAT CLIENT IS USING AUTO MODE
-			if(sendAuto){
-				this.sendMessage({
-					"x-auto": {
-						auto: sendAuto,
-					}
-				})
-			} else{
-				this.sendMessage({
-					"x-category": {
-						category: numCategory,
-					},
-					"x-auto": {
-						auto: sendAuto
-					}
-				})
-
-			}
+			this.currCategory = this.getCategoryLabel(currentCategory);
+			this.isAuto = isAutoSwitch;
+	
+			const message = isAutoSwitch ? 
+				{ "x-auto": { auto: true } } : 
+				{ 
+					"x-category": { category: numCategory }, 
+					"x-auto": { auto: false } 
+				};
+	
+			this.sendMessage(message);
 		}
 	};
-	//Used only for auto in handleSegment
+	
+	getCategoryLabel = (category: string) => {
+		switch (category) {
+			case '0':
+				return 'Stream';
+			case '1':
+				return 'Datagram';
+			case '2':
+				return 'Hybrid';
+			case '3':
+				return 'Auto';
+			default:
+				return 'Unknown';
+		}
+	};
+	
+	// Used only for auto in handleSegment
 	changeQuicType = (categoryNum: number) => {
-		if (categoryNum === 0) {
-			this.currCategory = 'QUIC Streams'
-		}
-		if (categoryNum === 1) {
-			this.currCategory = 'QUIC Datagrams'
-		}
-		if (categoryNum === 2) {
-			this.currCategory = 'QUIC Partially Reliable'
-		}
+		const categoryMap = new Map<number, string>([
+			[0, 'Auto (Stream)'],
+			[1, 'Auto (Datagram)'],
+			[2, 'Auto (Hybrid)']
+		]);
+	
+		this.currCategory = categoryMap.get(categoryNum) || 'Unknown';
+		
 		this.sendMessage({
-			"x-category": {
-				category: categoryNum,
-			},
-		})
-	};
+			"x-category": { category: categoryNum },
+		});
+	};	
 
 	pauseOrResume = (pause?: boolean) => {
 		console.log('in pauseOrResume | paused: %s pause: %s', this.paused, pause);
@@ -800,8 +784,13 @@ export class Player {
 					moofClockTime = performance.now();
 				} else if (boxType === 'mdat') {
 					const chunkDownloadDuration = performance.now() - boxStartOffset;
-					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
 					const chunkSize = size + lastMoofSize; // bytes
+					// const chunkDownloadSpeed = chunkSize * 8 / chunkDownloadDuration; // bits per second
+					// const chunkDownloadSpeedInMbps = chunkDownloadSpeed / 1000000;
+					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
+					// console.log("CHUNK SIZE", chunkSize)
+					// console.log("CHUNK DOWNLOAD SPEED", chunkDownloadSpeed)
+					// console.log("CHUNK DOWNLOAD SPEED IN MBPS", chunkDownloadSpeedInMbps)
 					totalChunkSize += chunkSize;
 					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
 					if (chunkCounter === 1) {
@@ -870,19 +859,21 @@ export class Player {
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}
-		let avgSegmentLatency;
+		let avgLastSegmentLatency;
 		let avgSegmentLatency2;
 		if(msg.init!= '4'){
-			avgSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
+			avgLastSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
 			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
-			// console.log(`
-			// 			=====================================================
-			// 			segment timestamp : ${msg.timestamp}
-			// 			total chunk latency : ${chunkLatencies.join(', ')}
-			// 			average chunk latency : ${avgSegmentLatency}
-			// 			=====================================================
-			// 			`);
-			this.throughputs.set('avgSegmentLatency', Number(avgSegmentLatency));
+			console.log(`
+						=====================================================
+						msg init: ${msg.init}
+						segment timestamp : ${msg.timestamp}
+						total chunk latency : ${chunkLatencies.join(', ')}
+						average chunk latency : ${avgLastSegmentLatency}
+						average chunk latency2 : ${avgLastSegmentLatency}
+						=====================================================
+						`);
+			this.throughputs.set('avgSegmentLatency', Number(avgLastSegmentLatency));
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
@@ -900,7 +891,7 @@ export class Player {
 			this.logFunc('segment start (client): ' + segmentStartTime);
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
 			if(msg.init!= '4'){
-				this.throughputs.set('segmentChunksLatency', Number(avgSegmentLatency));
+				this.throughputs.set('segmentChunksLatency', Number(avgLastSegmentLatency));
 				if(this.isAuto){
 					dbStore.addSegmentLogEntry({
 						testId: this.segmentTestId,
@@ -908,7 +899,7 @@ export class Player {
 						address: this.ipaddr,
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
-						latency: avgSegmentLatency,
+						latency: avgLastSegmentLatency,
 						latency2: avgSegmentLatency2,
 						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
@@ -926,7 +917,7 @@ export class Player {
 						address: this.ipaddr,
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
-						latency: avgSegmentLatency,
+						latency: avgLastSegmentLatency,
 						latency2: avgSegmentLatency2,
 						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
@@ -941,32 +932,70 @@ export class Player {
 			}
 		}
 		//judgement to change from streams to datagrams vice versa if auto is True;
-		if (this.isAuto){
-			//judgement of average bandwidth, average latency
-			//Changing only to datagrams when the latency is greater than a number
-			//For Future Work: There must be a better way to do this. Like receiving the bitrates from init maybe? and then judge from there? idk.
-			if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
-			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) > 100){
-				this.changeQuicType(2);
-			} else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgSegmentLatency) < 100){
-				this.changeQuicType(0);
+		// if (this.isAuto){
+		// 	//judgement of average bandwidth, average latency
+		// 	//Changing only to datagrams when the latency is greater than a number
+		// 	//For Future Work: There must be a better way to do this. Like receiving the bitrates from init maybe? and then judge from there? idk.
+		// 	// if (Number(serverBandwidthInMegabits) >= 4 && Number(avgLastSegmentLatency) > 100){
+		// 	// 	this.changeQuicType(2);
+		// 	// } else if (Number(serverBandwidthInMegabits) >= 4 && Number(avgLastSegmentLatency) < 100){
+		// 	// 	this.changeQuicType(0);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgLastSegmentLatency) > 100){
+		// 	// 	this.changeQuicType(2);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 4 && Number(serverBandwidthInMegabits) >= 2.6 && Number(avgLastSegmentLatency) < 100){
+		// 	// 	this.changeQuicType(0);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgLastSegmentLatency) > 100){
+		// 	// 	this.changeQuicType(2);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 2.6 && Number(serverBandwidthInMegabits) >= 1.3 && Number(avgLastSegmentLatency) < 100){
+		// 	// 	this.changeQuicType(0);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgLastSegmentLatency) > 100){
+		// 	// 	this.changeQuicType(2);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 1.3 && Number(serverBandwidthInMegabits) >= 0.365 && Number(avgLastSegmentLatency) < 100){
+		// 	// 	this.changeQuicType(0);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgLastSegmentLatency) > 100){
+		// 	// 	this.changeQuicType(2);
+		// 	// } else if (Number(serverBandwidthInMegabits) < 0.365 && Number(serverBandwidthInMegabits) >= 0 && Number(avgLastSegmentLatency) < 100){
+		// 	// 	this.changeQuicType(0);
+		// 	// }
+		// 	if (this.bufferLevel.get('video')! < 0.1 || this.bufferLevel.get('audio')! < 0.1) {
+		// 		this.changeQuicType(2);
+		// 	} else if (Math.abs(this.bufferLevel.get('video')! - this.bufferLevel.get('audio')!) > 1.5) {
+		// 		this.changeQuicType(2);
+		// 	} else if (this.bufferLevel.get('video')! > 4 && this.bufferLevel.get('audio')! > 4) {
+		// 		this.changeQuicType(0);
+		// 	}
+		// }
+		if (this.isAuto) {
+			const videoBufferLevel = this.bufferLevel.get('video')!;
+			const audioBufferLevel = this.bufferLevel.get('audio')!;
+			const bufferDifference = Math.abs(videoBufferLevel - audioBufferLevel);
+			
+			const LOW_BUFFER_THRESHOLD = 0.5;
+			const HIGH_BUFFER_THRESHOLD = 5;
+			const BUFFER_DIFFERENCE_THRESHOLD = 1.5;
+			const LATENCY_THRESHOLD = 40;
+			
+			// TODO: find better case for switch to stream mode (e.g. packet loss rate)
+			if (videoBufferLevel < LOW_BUFFER_THRESHOLD || audioBufferLevel < LOW_BUFFER_THRESHOLD) {
+				this.changeQuicType(2); // Switch to hybrid mode for low buffer
+			} else if (bufferDifference > BUFFER_DIFFERENCE_THRESHOLD) {
+				this.changeQuicType(2); // Switch to hybrid mode for unbalanced buffers
+			} else if (Number(avgLastSegmentLatency) > LATENCY_THRESHOLD) {
+				this.changeQuicType(2); // Switch to hybrid mode for high latency
+			} else if (videoBufferLevel > HIGH_BUFFER_THRESHOLD && audioBufferLevel > HIGH_BUFFER_THRESHOLD && Number(avgLastSegmentLatency) < LATENCY_THRESHOLD) {
+				this.changeQuicType(0); // Switch to stream mode for high buffer levels and low latency
+			} else {
+				this.changeQuicType(2); // Default to hybrid mode
 			}
-
+			
+			console.log(`
+			-------------- [Auto-Switch] --------------
+			Decision: ${this.currCategory},
+			Video Buffer Level: ${videoBufferLevel},
+			Audio Buffer Level: ${audioBufferLevel},
+			Average Last Segment Latency: ${avgLastSegmentLatency}
+			-------------------------------------------
+			`);
 		}
 	}
 
