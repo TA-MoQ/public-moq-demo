@@ -29,17 +29,17 @@
           
             <div id="controls" class="flex justify-between w-full">
               <button type="button" id="start">Start</button>
-              <button type="button" id="live">Go Live</button>
+              <button type="button" id="live" disabled>Go Live</button>
               <button type="button" id="throttle" style="display: none">Throttle: None</button>
 
-              <select id="throttles">
+              <select id="throttles" disabled>
                 <option>Throttle to:</option>
               </select>
 
-              <select id="resolutions">
+              <select id="resolutions" disabled>
                 <option>Set resolution to:</option>
               </select>
-              <button type="button" id="continue_streaming" data-status="streaming">Pause Streaming</button>
+              <button type="button" id="continue_streaming" data-status="streaming" disabled>Pause Streaming</button>
               <!-- <button type="button" id="active_bw_test">Active BW Test</button>
               <button type="button" id="test_datagram">Test Datagram</button>
               <button type="button" id="test_stream">Test Stream</button>
@@ -47,7 +47,7 @@
                 Test Datagram Video
               </button> -->
               <!-- <button type="button" id="test_stream2">Test Stream Video</button> -->
-              <select name="category" id="category">
+              <select name="category" id="category" disabled>
                 <option value="0">Stream</option>
                 <option value="1">Datagram</option>
                 <option value="2">Hybrid</option>

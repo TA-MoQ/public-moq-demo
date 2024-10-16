@@ -32,6 +32,11 @@
   margin-right: 8px;
 }
 
+#controls :disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 #controls button {
   display: inline-block;
   outline: 0;

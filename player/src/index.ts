@@ -405,6 +405,7 @@ startRef.addEventListener("click", async (e) => {
     if (!player.started) {
         await player.start();
         if (player.started) {
+            document.querySelectorAll("#controls :disabled").forEach((e) => e.removeAttribute("disabled"))
             startRef.innerText = 'Stop';
             setTimeout(() => startPlotting(), plotStartDelay);
         } else {
