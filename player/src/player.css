@@ -160,3 +160,11 @@
   overflow: auto;
   color: black;
 }
+
+video::-webkit-media-controls-timeline {
+  display: none;
+}
+
+video::-webkit-media-controls-play-button {
+  display: none;
+}

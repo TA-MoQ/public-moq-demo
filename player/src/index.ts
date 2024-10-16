@@ -6,10 +6,9 @@ import { estimator } from './estimator';
 const vidRef = document.getElementById("vid") as HTMLVideoElement;
 const startRef = document.getElementById("start") as HTMLButtonElement;
 const liveRef = document.getElementById("live") as HTMLButtonElement;
-const throttleRef = document.getElementById("throttle") as HTMLButtonElement;
+const throttleRef = document.getElementById("throttle") as HTMLDivElement;
 const throttleDDL = document.getElementById("throttles") as HTMLSelectElement;
 const statsRef = document.getElementById("stats") as HTMLDivElement;
-const playRef = document.getElementById("play") as HTMLDivElement;
 const resolutionsRef = document.getElementById("resolutions") as HTMLSelectElement;
 const activeBWTestRef = document.getElementById("active_bw_test")
 const continueStreamingRef = document.getElementById("continue_streaming")
@@ -421,17 +420,6 @@ liveRef.addEventListener("click", (e) => {
     player.goLive()
 })
 
-throttleRef.addEventListener("click", (e) => {
-    e.preventDefault()
-    player.throttle()
-})
-
-playRef.addEventListener('click', (e) => {
-    vidRef.muted = true;
-    vidRef.play()
-    e.preventDefault()
-})
-
 toggleLogRef.addEventListener('click', (e) => {
     const logEl = document.getElementById('log');
     if (!logEl) {
@@ -448,9 +436,6 @@ toggleLogRef.addEventListener('click', (e) => {
 });
 
 function playFunc(e: Event) {
-    playRef.style.display = "none"
-    //player.goLive()
-
     // Only fire once to restore pause/play functionality
     vidRef.removeEventListener('play', playFunc)
 }

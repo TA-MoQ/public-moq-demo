@@ -22,7 +22,6 @@
       <section class="w-full flex flex-col lg:flex-row gap-x-4 gap-y-4">
         <div id="player w-full">
           <div id="screen" class="relative lg:w-[50vw]">
-            <div id="play"><span>click to play</span></div>
             <video id="vid" controls></video>
           </div>
 
@@ -30,7 +29,6 @@
             <div id="controls" class="flex justify-between w-full">
               <button type="button" id="start">Start</button>
               <button type="button" id="live" disabled>Go Live</button>
-              <button type="button" id="throttle" style="display: none">Throttle: None</button>
 
               <select id="throttles" disabled>
                 <option>Throttle to:</option>
@@ -89,8 +87,8 @@
             <div class="elapsed_time"></div>
             <label>Current QUIC Type</label>
             <div class="quic_type"></div>
-            <!-- <label>Last Active BW Test</label>
-            <div class="active_bw"></div> -->
+            <label>Throttle</label>
+            <div id="throttle">None</div>
           </div>
           <div id="repo_info"></div>
         </div>

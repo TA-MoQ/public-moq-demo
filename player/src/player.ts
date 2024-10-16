@@ -172,6 +172,7 @@ export class Player {
 		this.receiveStreams();
 		this.receiveDatagrams();
 
+		this.vidRef.play()
 		if (this.activeBWTestInterval > 0) {
 			setTimeout(() => {
 				this.activeBWTestTimer = setInterval(() => this.startActiveBWTest(), this.activeBWTestInterval);
