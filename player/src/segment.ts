@@ -108,7 +108,6 @@ export class Segment {
 
 	// The segment has completed
 	finish() {
-		console.log(this.timestamp + " done")
 		this.done = true
 		this.flush()
 

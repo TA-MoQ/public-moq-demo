@@ -723,7 +723,7 @@ export class Player {
 		this.lastSegmentTimestamp = msg.timestamp;
 
 		// TODO: UNCOMMENT LOG
-		console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
+		// console.log('msg: %o tcRate: %d serverBandwidth: %d', msg, this.tcRate, this.serverBandwidth)
 
 		//single check to update IP Address for metric purposes
 		if (this.ipaddr === "") {
@@ -761,7 +761,6 @@ export class Player {
 		let count = 1
 		while (true) {
 			if (await stream.done()) {
-				console.log('end of stream')
 				break;
 			}
 
@@ -867,15 +866,15 @@ export class Player {
 		if(msg.init!= '4'){
 			avgLastSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
 			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
-			console.log(`
-						=====================================================
-						msg init: ${msg.init}
-						segment timestamp : ${msg.timestamp}
-						total chunk latency : ${chunkLatencies.join(', ')}
-						average chunk latency : ${avgLastSegmentLatency}
-						average chunk latency2 : ${avgLastSegmentLatency}
-						=====================================================
-						`);
+			// console.log(`
+			// 			=====================================================
+			// 			msg init: ${msg.init}
+			// 			segment timestamp : ${msg.timestamp}
+			// 			total chunk latency : ${chunkLatencies.join(', ')}
+			// 			average chunk latency : ${avgLastSegmentLatency}
+			// 			average chunk latency2 : ${avgLastSegmentLatency}
+			// 			=====================================================
+			// 			`);
 			this.throughputs.set('avgSegmentLatency', Number(avgLastSegmentLatency));
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
@@ -1058,7 +1057,6 @@ export class Player {
 		let chunkLatencies: number[] = [];
 	
 		// Loop through the arrival times and calculate the differences
-		console.log(arrivalTimes.length)
 		for (let i = 1; i < arrivalTimes.length; i++) {
 			let latency = arrivalTimes[i] - arrivalTimes[i - 1];
 			chunkLatencies.push(latency);
@@ -1075,7 +1073,6 @@ export class Player {
 		// Calculate the average latency
 		let totalLatency = 0;
 
-		console.log(latencies.length)
 		for (let i = 0; i < latencies.length; i++) {
 			totalLatency += latencies[i]
 		}

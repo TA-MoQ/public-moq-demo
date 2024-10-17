@@ -38,12 +38,12 @@ export class Track {
       this.segments.push(segment);
     }
 
-    console.log(
-      `[CURR ${this.type.toUpperCase()} SEGMENTS] length=${
-        this.segments.length
-      }`,
-      this.segments.peek()
-    );
+    // console.log(
+    //   `[CURR ${this.type.toUpperCase()} SEGMENTS] length=${
+    //     this.segments.length
+    //   }`,
+    //   this.segments.peek()
+    // );
     return this.segments.length;
   }
 

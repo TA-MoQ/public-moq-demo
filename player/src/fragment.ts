@@ -69,7 +69,6 @@ export class FragmentedMessageHandler {
 				}
 			}
 			if (await r.done()) {
-				console.log('end of stream')
 				break;
 			}
 
@@ -87,7 +86,6 @@ export class FragmentedMessageHandler {
 				chunk.set(moof)
 				chunk.set(mdat, moof.length)
 				// controller.enqueue(chunk)
-				console.log(chunk.length)
 				this.enqueueChunk(segmentID, chunk, controller)
 			}
 			count++
@@ -224,7 +222,6 @@ export class FragmentedMessageHandler {
 
 	private handleFin(segmentID: string, chunkTotal: number) {
 		const count = this.chunkCount.get(segmentID)
-		console.log("CLOSE", segmentID, chunkTotal, count)
 		if (chunkTotal === count) {
 			this.cleanup(segmentID)
 		} else {
