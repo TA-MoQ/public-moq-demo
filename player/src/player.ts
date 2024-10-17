@@ -32,14 +32,14 @@ export class Player {
 	categoryRef: HTMLSelectElement; // The category dropdown
 	activeBWTestRef: HTMLButtonElement; // The active bw test button
 	activeBWAsset: any; // {url}
-	activeBWResetTimer: NodeJS.Timer | undefined;
+	activeBWResetTimer: NodeJS.Timeout | undefined;
 
 	bufferLevel: Map<string, number>;
 
 	throttleCount: number; // number of times we've clicked the button in a row
 
-	interval?: NodeJS.Timer;
-	activeBWTestTimer?: NodeJS.Timer;
+	interval?: NodeJS.Timeout;
+	activeBWTestTimer?: NodeJS.Timeout;
 
 	timeRef?: DOMHighResTimeStamp;
 
