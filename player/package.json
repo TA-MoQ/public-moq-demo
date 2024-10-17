@@ -1,11 +1,11 @@
 {
   "source": "src/index.html",
   "scripts": {
-    "deploy": "parcel serve --cert /certs/cert.pem --key /certs/key.pem",
     "prodtest": "parcel serve --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem",
     "localtest": "parcel serve --https --cert ../cert/cert.pem --key ../cert/key.pem",
     "build": "parcel build src/index.html --no-optimize src/appsettings.js",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "deploy": "npm run build && serve -s dist --ssl-cert --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem"
   },
   "devDependencies": {
     "@parcel/validator-typescript": "^2.6.0",
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "heap-js": "^2.5.0",
-    "plotly.js-dist": "^2.17.0"
+    "plotly.js-dist": "^2.17.0",
+    "serve": "^14.2.4"
   }
 }
