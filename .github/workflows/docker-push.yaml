@@ -20,6 +20,6 @@ jobs:
         name: Build and push
         uses: docker/build-push-action@v6
         with:
-          file: "{context}/Dockerfile.streaming"
+          file: ./Dockerfile.streaming
           push: true
           tags: rorren/moq-server:latest
