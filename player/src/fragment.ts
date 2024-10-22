@@ -174,9 +174,9 @@ export class FragmentedMessageHandler {
 					} else {
 						chunkBuffers.enqueue(completeData)
 					}
-				}
 
-				this.fragmentBuffers.delete(fragment.chunkID);
+					this.fragmentBuffers.delete(fragment.chunkID);
+				}
 			}
 		}
 		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
