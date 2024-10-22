@@ -1115,18 +1115,18 @@ export class Player {
 	}
 
 	updateStats = () => {
-		const audioFiller = this.statsRef.querySelector('.audio.buffer .fill') as HTMLElement;
+		const audioBufContainer = this.statsRef.querySelector('.audio.buffer') as HTMLElement;
 		const audioBufferDurationEl = this.statsRef.querySelector('.audio.label>.seconds') as HTMLElement;
-		if (audioFiller) {
+		if (audioBufContainer) {
 			const ranges: any = (this.audio) ? this.audio.buffered() : { length: 0 };
-			this.visualizeBuffer(audioFiller, audioBufferDurationEl, 'audio', ranges);
+			this.visualizeBuffer(audioBufContainer, audioBufferDurationEl, 'audio', ranges);
 		}
 
-		const videoFiller = this.statsRef.querySelector('.video.buffer .fill') as HTMLElement;
+		const videoBufContainer = this.statsRef.querySelector('.video.buffer') as HTMLElement;
 		const videoBufferDurationEl = this.statsRef.querySelector('.video.label>.seconds') as HTMLElement;
-		if (videoFiller) {
+		if (videoBufContainer) {
 			const ranges: any = (this.video) ? this.video.buffered() : { length: 0 }
-			this.visualizeBuffer(videoFiller, videoBufferDurationEl, 'video', ranges)
+			this.visualizeBuffer(videoBufContainer, videoBufferDurationEl, 'video', ranges)
 		}
 
 		const bw = document.querySelector('#stats .server_bw') as HTMLDivElement;
@@ -1207,7 +1207,20 @@ export class Player {
 		link.remove();
 	};
 
-	visualizeBuffer(bufferFiller: HTMLElement, durationEl: HTMLElement, bufferType: 'audio' | 'video', ranges: TimeRanges) {
+	visualizeBuffer(bufferContainer: HTMLElement, durationEl: HTMLElement, bufferType: 'audio' | 'video', ranges: TimeRanges) {
+		// bufferContainer.innerHTML = ""
+		const delta = ranges.length - bufferContainer.childElementCount
+		if (delta > 0) {
+			for (let i = 0; i < delta; i++) {
+				const bufferFiller = document.createElement("div");
+				bufferFiller.classList.add("fill");
+				bufferContainer.appendChild(bufferFiller)	
+			}
+		} else {
+			for (let i = 0; i < Math.abs(delta); i++) {
+				bufferContainer.removeChild(bufferContainer.lastChild!)
+			}	
+		}
 		const max = 5
 
 		let index = 0
@@ -1215,6 +1228,7 @@ export class Player {
 
 		// TODO: check buffer calculation
 		for (let i = 0; i < ranges.length; i += 1) {
+			const bufferFiller = bufferContainer.children[i]
 			let start = ranges.start(i) - this.vidRef.currentTime
 			let end = ranges.end(i) - this.vidRef.currentTime
 
