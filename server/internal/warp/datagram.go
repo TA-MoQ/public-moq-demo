@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/TA-MoQ/webtransport-go"
+	"github.com/TugasAkhir-QUIC/webtransport-go"
 )
 
 // TODO: mulai dari awal untuk setiap koneksi
@@ -92,7 +92,7 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 				}
 
 				header := d.generateHeader(uint16(i), uint16(totalFragments))
-				err := d.inner.SendDatagramWithPriority(append(header, chunk[start:end]...), d.priority)
+				err := d.inner.SendDatagram(append(header, chunk[start:end]...))
 				//fmt.Println("SENDING DATAGRAM", d.chunkNumber, d.ID)
 				if err != nil {
 					return err
