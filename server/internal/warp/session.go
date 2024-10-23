@@ -11,9 +11,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/TA-MoQ/webtransport-go"
 
-	"github.com/TugasAkhir-QUIC/quic-go"
+	"github.com/TA-MoQ/quic-go"
 	"github.com/kixelated/invoker"
 )
 

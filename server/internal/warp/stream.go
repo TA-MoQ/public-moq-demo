@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/TugasAkhir-QUIC/webtransport-go"
+	"github.com/TA-MoQ/webtransport-go"
 )
 
 // Wrapper around quic.SendStream to make Write non-blocking.
