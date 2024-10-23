@@ -1,7 +1,7 @@
 #!/bin/bash
 input_file="source.mp4"
 segment_duration=2
-chunk_duration=1
+chunk_duration=0.04
 fps=25
 dir=${1:-'.'}
 
