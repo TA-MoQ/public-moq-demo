@@ -2,8 +2,11 @@ from datetime import datetime, timezone
 from enum import IntEnum
 import io
 import json
+from pathlib import Path
 import re
+import shutil
 import sys
+import tempfile
 import time
 
 from playwright.sync_api import sync_playwright, Browser
@@ -33,6 +36,8 @@ def run_latency_test(browser: Browser, frontend_url: str, mode: StreamMode):
         # Give it some time to load
         time.sleep(2)
 
+    # Give it some time to load
+    time.sleep(2)
     page.select_option("#category", str(mode.value))
     # Give it some time to load
     time.sleep(2)
@@ -64,21 +69,31 @@ def run_latency_test(browser: Browser, frontend_url: str, mode: StreamMode):
 
 
 def main(frontend_url: str, output: str):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            args=["--allow-insecure-localhost", "--origin-to-force-quic-on=localhost:4443"],
-            executable_path="/usr/bin/google-chrome-stable",
-        )
-        stream = run_latency_test(browser, frontend_url, StreamMode.STREAM)
-        datagram = run_latency_test(browser, frontend_url, StreamMode.DATAGRAM)
-        hybrid = run_latency_test(browser, frontend_url, StreamMode.HYBRID)
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=False,
+                args=["--allow-insecure-localhost", "--origin-to-force-quic-on=localhost:4443"],
+                executable_path="/usr/bin/google-chrome-stable",
+                downloads_path=tmpdirname,
+            )
+            stream = run_latency_test(browser, frontend_url, StreamMode.STREAM)
+            datagram = run_latency_test(browser, frontend_url, StreamMode.DATAGRAM)
+            hybrid = run_latency_test(browser, frontend_url, StreamMode.HYBRID)
 
-        # TODO: Get data from excel
-        browser.close()
+            browser.close()
 
-    with open(output, "w") as f:
-        json.dump({"stream": {"latency": stream}, "datagram": {"latency": datagram}, "hybrid": {"hybrid": hybrid}}, f)
+        with open(Path(tmpdirname) / "output.json", "w") as f:
+            json.dump(
+                {
+                    "stream": {"latency": stream},
+                    "datagram": {"latency": datagram},
+                    "hybrid": {"hybrid": hybrid},
+                },
+                f,
+            )
+
+        shutil.make_archive(output, "zip", tmpdirname)
 
 
 if __name__ == "__main__":
