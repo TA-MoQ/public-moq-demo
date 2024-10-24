@@ -7,8 +7,9 @@ services:
         - "quic-media-frontend:latest"
     volumes:
       - ./cert:/certs
+    command: "npx serve dist --ssl-cert /certs/cert.pem --ssl-key /certs/key.pem"
     ports:
-      - "1234:1234"
+      - "3000:3000"
   media:
     build:
       context: .
