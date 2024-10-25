@@ -862,8 +862,8 @@ export class Player {
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}
-		console.log("msg", msg)
-		console.log("total segment size", totalSegmentSize)
+		// console.log("msg", msg)
+		// console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
 		let avgSegmentLatency2;
 		if(msg.init!= '4'){
@@ -975,14 +975,15 @@ export class Player {
 		// // console.log("packets sent:", (await (await this.quic)?.getStats())?.packetsSent)
 		// console.log("stats:", await (await this.quic)?.getStats())
 		// console.log("---------------------------------------------------------------------")
-		console.log(`=-=-=-=-=-=-= Buffered -=-=-=-=-=-=-=
-					audio buffering count:", ${this.audio.bufferingCount});
-					video buffering count:", ${this.video.bufferingCount});
-					audio total buffering duration:", ${this.audio.totalBufferingDuration});
-					video total buffering duration:", ${this.video.totalBufferingDuration});
-					=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
-					// audio buffered:", ${this.audio.buffered().ranges});
-					// video buffered:", ${this.video.buffered().ranges});
+		// console.log("audio buffered:", this.audio.buffered().ranges);
+		// console.log("video buffered:", this.video.buffered().ranges);
+		console.log(`
+			=-=-=-=-=-=-= Buffering Stats =-=-=-=-=-=-=-=
+			audio buffering count:, ${this.audio.bufferingCount});
+			video buffering count:, ${this.video.bufferingCount});
+			audio total buffering duration:, ${this.audio.totalBufferingDuration});
+			video total buffering duration:, ${this.video.totalBufferingDuration});
+			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 		if (this.isAuto) {
 			const videoBufferLevel = this.bufferLevel.get('video')!;
 			const audioBufferLevel = this.bufferLevel.get('audio')!;
@@ -1243,21 +1244,21 @@ export class Player {
 		let prev = 0
 
 		// TODO: check buffer calculation
-		for (let i = 0; i < ranges.length; i += 1) {
-			const bufferFiller = bufferContainer.children[i]
-			let start = ranges.start(i) - this.vidRef.currentTime
-			let end = ranges.end(i) - this.vidRef.currentTime
+        for (let i = 0; i < ranges.length; i += 1) {
+            const bufferFiller = bufferContainer.children[i]
+            let start = ranges.start(i) - this.vidRef.currentTime
+            let end = ranges.end(i) - this.vidRef.currentTime
 
-			if (end < 0 || start > max) {
-				continue
-			}
-			this.bufferLevel.set(bufferType, end);
-			durationEl.innerText = end.toFixed(2)
-			bufferFiller.setAttribute('style', "left: " + (100 * Math.max(start, 0) / max) + "%; right: " + (100 - 100 * Math.min(end, max) / max) + "%")
-			index += 1
+            if (end < 0 || start > max) {
+                continue
+            }
+            this.bufferLevel.set(bufferType, end);
+            durationEl.innerText = end.toFixed(2)
+            bufferFiller.setAttribute('style', "left: " + (100 * Math.max(start, 0) / max) + "%; right: " + (100 - 100 * Math.min(end, max) / max) + "%")
+            index += 1
 
-			prev = end
-		}
+            prev = end
+        }
 	}
 }
 
