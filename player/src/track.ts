@@ -14,6 +14,11 @@ export class Track {
   type: "audio" | "video";
   source: Source;
   segments: Heap<Segment>;
+  bufferingCount: number;
+  totalBufferingDuration: number;
+
+  // Track the latest end time to prevent recounting gaps
+  private latestBufferedEnd: number;
 
   constructor(source: Source, type: "audio" | "video") {
     this.type = type;
@@ -23,6 +28,9 @@ export class Track {
     this.segments = new Heap<Segment>(
       (a: Segment, b: Segment) => a.timestamp - b.timestamp
     );
+    this.bufferingCount = 0;
+    this.totalBufferingDuration = 0;
+    this.latestBufferedEnd = 0;
   }
 
   add(segment: Segment): number {
@@ -51,12 +59,26 @@ export class Track {
     let ranges: TimeRange[] = [];
 
     const buffered = this.source.buffered() as TimeRanges;
+    let lastEndTime = 0;
     for (let i = 0; i < buffered.length; i += 1) {
       // Convert the TimeRanges into an oject we can modify
       ranges.push({
         start: buffered.start(i),
         end: buffered.end(i),
       });
+      
+      // Only consider gaps if they occur after the last buffered segment's end
+      if (lastEndTime > 0 && ranges[i].start > lastEndTime && ranges[i].start > this.latestBufferedEnd) {
+        const gapDuration = ranges[i].start - lastEndTime;
+
+        // Increment buffering counters
+        this.bufferingCount++;
+        this.totalBufferingDuration += gapDuration;
+      }
+
+      // Update the latest buffered end time
+      lastEndTime = ranges[i].end;
+      this.latestBufferedEnd = Math.max(this.latestBufferedEnd, lastEndTime);
     }
 
     // Loop over segments and add in their ranges, merging if possible.
@@ -91,6 +113,7 @@ export class Track {
       end: (x) => {
         return ranges[x].end;
       },
+      // ranges
     };
   }
 

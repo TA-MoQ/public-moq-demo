@@ -656,12 +656,13 @@ export class Player {
 
 			const payload = new TextDecoder('utf-8').decode(await r.bytes(size - 8));
 			const msg = JSON.parse(payload) as Message
+			// console.log("msg", msg)
 
 			if (msg.init) {
-				// console.log("Msg Init: " + msg.init.id)
+				// console.log("Msg Init: ", msg.init)
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
-				// console.log("Msg Segment: " + msg.segment.init)
+				// console.log("Msg Segment: ", msg.segment)
 				return this.handleSegment(r, msg.segment, start)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
@@ -691,7 +692,7 @@ export class Player {
 			const data = await stream.read()
 			//request arrived
 			if (!data) break
-			console.log(data)
+			// console.log("init", data)
 			init.push(data)
 		}
 	}
@@ -861,20 +862,22 @@ export class Player {
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}
+		console.log("msg", msg)
+		console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
 		let avgSegmentLatency2;
 		if(msg.init!= '4'){
 			avgLastSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
 			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
-			// console.log(`
-			// 			=====================================================
-			// 			msg init: ${msg.init}
-			// 			segment timestamp : ${msg.timestamp}
-			// 			total chunk latency : ${chunkLatencies.join(', ')}
-			// 			average chunk latency : ${avgLastSegmentLatency}
-			// 			average chunk latency2 : ${avgLastSegmentLatency}
-			// 			=====================================================
-			// 			`);
+			console.log(`
+						=====================================================
+						msg init: ${msg.init}
+						segment timestamp : ${msg.timestamp}
+						total chunk latency : ${chunkLatencies.join(', ')}
+						average chunk latency : ${avgLastSegmentLatency}
+						average chunk latency2 : ${avgLastSegmentLatency}
+						=====================================================
+						`);
 			this.throughputs.set('avgSegmentLatency', Number(avgLastSegmentLatency));
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
@@ -967,6 +970,19 @@ export class Player {
 		// 		this.changeQuicType(0);
 		// 	}
 		// }
+		// console.log("---------------------- Webtransport getStats() -----------------------")
+		// // console.log("packets received:", (await (await this.quic)?.getStats())?.packetsReceived)
+		// // console.log("packets sent:", (await (await this.quic)?.getStats())?.packetsSent)
+		// console.log("stats:", await (await this.quic)?.getStats())
+		// console.log("---------------------------------------------------------------------")
+		console.log(`=-=-=-=-=-=-= Buffered -=-=-=-=-=-=-=
+					audio buffering count:", ${this.audio.bufferingCount});
+					video buffering count:", ${this.video.bufferingCount});
+					audio total buffering duration:", ${this.audio.totalBufferingDuration});
+					video total buffering duration:", ${this.video.totalBufferingDuration});
+					=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+					// audio buffered:", ${this.audio.buffered().ranges});
+					// video buffered:", ${this.video.buffered().ranges});
 		if (this.isAuto) {
 			const videoBufferLevel = this.bufferLevel.get('video')!;
 			const audioBufferLevel = this.bufferLevel.get('audio')!;
@@ -1062,7 +1078,7 @@ export class Player {
 			chunkLatencies.push(latency);
 		}
 	
-		// Calculate the average latency
+		// Calculate the average jitter
 		const totalLatency = chunkLatencies.reduce((sum, latency) => sum + latency, 0);
 		const averageLatency = totalLatency / chunkLatencies.length;
 	
