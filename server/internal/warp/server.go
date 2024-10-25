@@ -13,9 +13,8 @@ import (
 	"time"
 
 	"github.com/TA-MoQ/quic-go"
-	"github.com/TA-MoQ/quic-go/logging"
-
 	"github.com/TA-MoQ/quic-go/http3"
+	"github.com/TA-MoQ/quic-go/logging"
 	"github.com/TA-MoQ/webtransport-go"
 	"github.com/kixelated/invoker"
 )
@@ -53,49 +52,85 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	s.continueStreaming = true
 	s.tcRate = -1
 
-	quicConfig := &quic.Config{}
+	quicConfig := &quic.Config{
+		// Tracer: qlog.DefaultTracer,
+	}
 
-	//if config.LogDir != "" {
-	//	quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
-	//		path := fmt.Sprintf("%s-%s.qlog", p, hex.EncodeToString(connectionID))
-	//
-	//		f, err := os.Create(filepath.Join(config.LogDir, path))
-	//		if err != nil {
-	//			// lame
-	//			panic(err)
-	//		}
-	//
-	//		return f
-	//	})
-	//}
+	// if config.LogDir != "" {
+	// 	quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
+	// 		path := fmt.Sprintf("%s-%s.qlog", p, hex.EncodeToString(connectionID))
+	
+	// 		f, err := os.Create(filepath.Join(config.LogDir, path))
+	// 		if err != nil {
+	// 			// lame
+	// 			panic(err)
+	// 		}
+	
+	// 		return f
+	// 	})
+	// }
+	// packetsSent := 0
+	// packetsLost := 0
 	quicConfig.Tracer = func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
 		return &logging.ConnectionTracer{
-			//BufferedPacket: func(p logging.PacketType, b logging.ByteCount) {
-			//	fmt.Println(p)
-			//},
-			//SentShortHeaderPacket: func(header *logging.ShortHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
-			//	for _, frame := range frames {
-			//		switch f := frame.(type) {
-			//		case *logging.CryptoFrame:
-			//
-			//			fmt.Println("This is a CryptoFrame")
-			//		case *logging.StreamFrame:
-			//			fmt.Print(" ", f.StreamID)
-			//			//fmt.Println("This is a StreamFrame", f)
-			//		case *logging.DatagramFrame:
-			//
-			//			fmt.Println("This is a DatagramFrame")
-			//		default:
-			//			fmt.Println("Unknown frame type")
-			//		}
-			//	}
-			//	fmt.Print("\n")
-			//},
-			//SentLongHeaderPacket: func(header *logging.ExtendedHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
-			//	fmt.Println(time.Now())
-			//},
+			// LostPacket: func(encLevel logging.EncryptionLevel, pn logging.PacketNumber, reason logging.PacketLossReason) {
+			// 	packetsLost++
+			// 	packetLossRate := (float64(packetsLost) / float64(packetsSent)) * 100
+			// 	fmt.Printf("Packet #%d lost with reason %d | Loss Rate: %.2f%%\n", pn, reason, packetLossRate)
+			// },
+			// UpdatedMetrics: func(rttStats *logging.RTTStats, cwnd, bytesInFlight logging.ByteCount, packetsInFlight int) {
+			// 	// fmt.Println("====================================")
+			// 	// fmt.Println("rttStats: ", rttStats)
+			// 	// fmt.Println("cwnd: ", cwnd)
+			// 	// fmt.Println("bytesInFlight: ", bytesInFlight)
+			// 	// fmt.Println("packetsInFlight: ", packetsInFlight)
+			// 	// fmt.Println("====================================")
+			// },
+			// BufferedPacket: func(p logging.PacketType, b logging.ByteCount) {
+			// 	fmt.Println(p)
+			// },
+			// SentShortHeaderPacket: func(header *logging.ShortHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
+			// 	packetsSent++
+			// 	for _, frame := range frames {
+			// 		fmt.Printf("[SentShortHeader] Packet #%d ", header.PacketNumber)
+			// 		switch f := frame.(type) {
+			// 		case *logging.CryptoFrame:
+			// 			fmt.Printf("is a CryptoFrame\n")
+			// 		case *logging.StreamFrame:
+			// 			// fmt.Print(" ", f.StreamID)
+			// 			// fmt.Println("This is a StreamFrame", f)
+			// 			fmt.Printf("is a StreamFrame with ID: %d\n", f.StreamID)
+			// 		case *logging.DatagramFrame:
+			// 			fmt.Printf("is a DatagramFrame\n")
+			// 		default:
+			// 			fmt.Println("is an unknown frame type")
+			// 		}
+			// 		fmt.Println("Frame Content: ", frame)
+			// 	}
+			// 	fmt.Print("\n")
+			// },
+			// SentLongHeaderPacket: func(header *logging.ExtendedHeader, count logging.ByteCount, ecn logging.ECN, frame *logging.AckFrame, frames []logging.Frame) {
+			// 	packetsSent++
+			// 	// fmt.Println(time.Now())
+			// 	// for _, frame := range frames {
+			// 	// 	fmt.Printf("[SentLongHeader] Packet #%d ", header.PacketNumber)
+			// 	// 	switch f := frame.(type) {
+			// 	// 	case *logging.CryptoFrame:
+			// 	// 		fmt.Printf("is a CryptoFrame\n")
+			// 	// 	case *logging.StreamFrame:
+			// 	// 		// fmt.Print(" ", f.StreamID)
+			// 	// 		// fmt.Println("This is a StreamFrame", f)
+			// 	// 		fmt.Printf("is a StreamFrame with ID: %d\n", f.StreamID)
+			// 	// 	case *logging.DatagramFrame:
+			// 	// 		fmt.Printf("is a DatagramFrame\n")
+			// 	// 	default:
+			// 	// 		fmt.Println("is an unknown frame type")
+			// 	// 	}
+			// 	// }
+			// },
 		}
 	}
+	// quicConfig.Tracer = qlog.DefaultTracer
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{*config.Cert},
