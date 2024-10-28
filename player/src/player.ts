@@ -64,6 +64,7 @@ export class Player {
 	segmentTestId: string;
 	fragment: FragmentedMessageHandler
 	latencyData: any[] = [];
+	windowSize: number;
 	isAuto: boolean
 	constructor(props: any) {
 		this.vidRef = props.vid
@@ -80,6 +81,7 @@ export class Player {
 		this.totalSizeProcessed = 0;
 		this.url = props.url;
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
+		this.windowSize = 25;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -748,6 +750,7 @@ export class Player {
 		let totalSegmentSize = 0;
 		const segmentDownloadStart = performance.now()
 		let chunkLatencies = [];
+		let chunkJitters = [];
 		let chunkCounter = 0;
 		let isVideoSegment = init.info.videoTracks.length > 0;
 		let lastMoofSize = 0;
@@ -791,13 +794,18 @@ export class Player {
 
 					chunkLatencies.push(lastMoofDifferenceTime);
 					if (chunkLatencies.length > 1) {
-						let lastData = chunkLatencies.length-1;
-						let latency = Math.abs(chunkLatencies[lastData] - chunkLatencies[lastData - 1]);
-						this.latencyData.push(latency)
-						// console.log(latency, "LATENCY")
+						let endPos = chunkLatencies.length-1;
+						let jitter = chunkLatencies[endPos] - chunkLatencies[endPos - 1]
+						if (jitter < 0 ){
+						jitter = 0	
+						}
+						chunkJitters.push(jitter)
+						// let latency = Math.abs(chunkLatencies[lastData] - chunkLatencies[lastData - 1]);
+						// this.latencyData.push(latency)
+						// console.log(latency, "LATENCY")	
 						//SWMA Latency
-						let windowStart = Math.max(0, this.latencyData.length - 25);
-						let windowData = this.latencyData.slice(windowStart)
+						let windowStart = Math.max(0, chunkLatencies.length - this.windowSize);
+						let windowData = chunkLatencies.slice(windowStart)
 						let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
 						this.throughputs.set('SWMALatency', windowSum/windowData.length);
 					}
@@ -882,23 +890,21 @@ export class Player {
 		console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
-		let avgSegmentLatency2;
 		let avgLastSegmentJitter;
 		if(msg.init!= '4'){
-			avgLastSegmentLatency = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
-			avgLastSegmentJitter = this.calculateAverageChunkJitter2(chunkLatencies).toFixed(2);
-			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
+			avgLastSegmentLatency = this.calculateAverage(chunkLatencies).toFixed(2);
+			avgLastSegmentJitter = this.calculateAverage(chunkJitters).toFixed(2);
 			console.log(`
 						=====================================================
 						msg init: ${msg.init}
 						segment timestamp : ${msg.timestamp}
 						chunk latencies : ${chunkLatencies.join(', ')}
 						average chunk latency : ${avgLastSegmentLatency}
-						average chunk latency2 : ${avgLastSegmentLatency}
 						average chunk jitter : ${avgLastSegmentJitter}
 						=====================================================
 						`);
 			this.throughputs.set('avgSegmentLatency', Number(avgLastSegmentLatency));
+			this.throughputs.set('avgSegmentJitter', Number(avgLastSegmentJitter));
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
@@ -1122,7 +1128,7 @@ export class Player {
 		//console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
-	calculateAverageChunkLatency(arrivalTimes: number[]): number {
+	calculate(arrivalTimes: number[]): number {
 		// Array to store calculated chunk latencies
 		let chunkLatencies: number[] = [];
 	
@@ -1139,21 +1145,21 @@ export class Player {
 		return averageLatency;
 	}
 
-	calculateAverageChunkJitter2(chunkLatencies: number[]): number {
-		return this.calculateAverageChunkLatency(chunkLatencies);
-	}
+	// calculateAverageChunkJitter2(chunkLatencies: number[]): number {
+	// 	return this.calculateAverageChunkLatency(chunkLatencies);
+	// }
 
-	calculateAverageChunkLatency2(latencies: number[]): number {	
+	calculateAverage(arr: number[]): number {	
 		// Calculate the average latency
-		let totalLatency = 0;
+		let sum = 0;
 
-		for (let i = 0; i < latencies.length; i++) {
-			totalLatency += latencies[i]
+		for (let i = 0; i < arr.length; i++) {
+			sum += arr[i]
 		}
 
-		const averageLatency = totalLatency / latencies.length;
+		const avg = sum / arr.length;
 	
-		return averageLatency;
+		return avg;
 	}
 
 	computeTPut = (stats: any[]) => {

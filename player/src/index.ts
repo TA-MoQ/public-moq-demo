@@ -168,6 +168,51 @@ const plotLayoutLatency = {
     },
 
 } as Plotly.Layout;
+
+const plotLayoutJitter = {
+  hovermode: 'closest',
+  margin: {
+      r: 10,
+      t: 40,
+      b: 40,
+      l: 50
+  },
+  height: 400,
+  width: 440,
+  title: '',
+  showlegend: true,
+  legend: {
+      x: 0,
+      y: -0.3,
+      orientation: 'h',
+  },
+  grid: {
+      rows: 1,
+      columns: 1,
+      pattern: 'independent'
+  },
+  xaxis: {
+      anchor: 'y',
+      type: 'linear',
+      showgrid: true,
+      showticklabels: true,
+      title: 'Time (s)',
+      rangemode: 'tozero'
+  },
+  yaxis: {
+      anchor: 'x',
+      showgrid: true,
+      title: 'Jitter (ms)',
+      rangemode: 'tozero'
+  },
+  font: {
+      family: 'sans-serif',
+      size: 18,
+      color: '#000'
+  },
+
+} as Plotly.Layout;
+
 //plotlayout for throughput
 const plotLayoutThroughput = {
     hovermode: 'closest',
@@ -295,6 +340,19 @@ const plotLatencyData = [{
     }
 }] as any[];
 
+const plotJitterData = [{
+  x: [] as number[],
+  y: [] as number[],
+  name: 'Latency',
+  mode: 'line',
+  xaxis: 'x',
+  yaxis: 'y',
+  line: {
+      color: '#838f35',
+      width: 3
+  }
+}] as any[];
+
 const plotThroughputData = [{
     x: [] as number[],
     y: [] as number[],
@@ -310,6 +368,7 @@ const plotThroughputData = [{
 
 const plot = Plotly.newPlot(document.getElementById('plot') as HTMLDivElement, plotData, plotLayout, plotConfig);
 const plotLatency = Plotly.newPlot(document.getElementById('plot_latency') as HTMLDivElement, plotLatencyData, plotLayoutLatency, plotConfig);
+const plotJitter = Plotly.newPlot(document.getElementById('plot_jitter') as HTMLDivElement, plotJitterData, plotLayoutJitter, plotConfig);
 const plotThroughput = Plotly.newPlot(document.getElementById('plot_throughput') as HTMLDivElement, plotThroughputData, plotLayoutThroughput, plotConfig);
 const player = new Player({
     url: params.get("url") || window.config.serverURL,
@@ -365,9 +424,11 @@ const startPlotting = () => {
         plotData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         plotLatencyData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         plotThroughputData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
+        plotJitterData.forEach(p => (p.x as Plotly.Datum[]).push(currentSec));
         (plotData[0].y as Plotly.Datum[]).push(player.serverBandwidth / 1000000);
         (plotData[1].y as Plotly.Datum[]).push(player.tcRate / 1000000);
         (plotLatencyData[0].y as Plotly.Datum[]).push((player.throughputs.get('avgSegmentLatency') || 0));
+        (plotJitterData[0].y as Plotly.Datum[]).push((player.throughputs.get('avgSegmentJitter') || 0));
         (plotThroughputData[0].y as Plotly.Datum[]).push((player.throughputs.get('chunk') || 0)/1000);
 
         // show max 60 seconds
@@ -387,6 +448,10 @@ const startPlotting = () => {
             x: Object.values(plotLatencyData).map(item => item.x),
             y: Object.values(plotLatencyData).map(item => item.y),
         } as Plotly.Data;
+        const data_jitter_update = {
+          x: Object.values(plotJitterData).map(item => item.x),
+          y: Object.values(plotJitterData).map(item => item.y),
+      } as Plotly.Data;
 
         const data_throughput_update = {
             x: Object.values(plotThroughputData).map(item => item.x),
@@ -394,8 +459,9 @@ const startPlotting = () => {
         } as Plotly.Data;
 
         Plotly.update(document.getElementById('plot') as Plotly.Root, data_update, plotLayout)
-        Plotly.update(document.getElementById('plot_latency') as Plotly.Root, data_latency_update, plotLayout)
-        Plotly.update(document.getElementById('plot_throughput') as Plotly.Root, data_throughput_update, plotLayout)
+        Plotly.update(document.getElementById('plot_latency') as Plotly.Root, data_latency_update, plotLayoutLatency)
+        Plotly.update(document.getElementById('plot_jitter') as Plotly.Root, data_jitter_update, plotLayoutJitter)
+        Plotly.update(document.getElementById('plot_throughput') as Plotly.Root, data_throughput_update, plotLayoutThroughput)
     }, playerRefreshInterval);
 };
 
