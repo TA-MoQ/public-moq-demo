@@ -976,47 +976,69 @@ export class Player {
 		// // console.log("packets sent:", (await (await this.quic)?.getStats())?.packetsSent)
 		// console.log("stats:", await (await this.quic)?.getStats())
 		// console.log("---------------------------------------------------------------------")
-		const videoBuffered = this.video.buffered();
-		let videoBufferedRanges = [];
-		let totalVideoBufferedDuration = 0;
-		for (let i = 0; i < videoBuffered.length; i++) {
-			videoBufferedRanges.push({start: videoBuffered.start(i), end: videoBuffered.end(i)});
-			if (i > 0) totalVideoBufferedDuration += videoBufferedRanges[i].start - videoBufferedRanges[i-1].end;
+		const videoBuffer = this.video.buffered();
+		let videoBufferRanges = [];
+		let videoTotalBufferGapDuration = 0;
+		for (let i = 0; i < videoBuffer.length; i++) {
+			videoBufferRanges.push({ start: videoBuffer.start(i), end: videoBuffer.end(i) });
+			if (i > 0) videoTotalBufferGapDuration += videoBufferRanges[i].start - videoBufferRanges[i - 1].end;
 		}
 		
-		const audioBuffered = this.audio.buffered();
-		let audioBufferedRanges = [];
-		let totalAudioBufferedDuration = 0;
-		for (let i = 0; i < audioBuffered.length; i++) {
-			audioBufferedRanges.push({start: audioBuffered.start(i), end: audioBuffered.end(i)});
-			if (i > 0) totalAudioBufferedDuration += audioBufferedRanges[i].start - audioBufferedRanges[i-1].end;
+		const audioBuffer = this.audio.buffered();
+		let audioBufferRanges = [];
+		let audioTotalBufferGapDuration = 0;
+		for (let i = 0; i < audioBuffer.length; i++) {
+			audioBufferRanges.push({ start: audioBuffer.start(i), end: audioBuffer.end(i) });
+			if (i > 0) audioTotalBufferGapDuration += audioBufferRanges[i].start - audioBufferRanges[i - 1].end;
 		}
-		if (videoBufferedRanges.length > 0 && audioBufferedRanges.length > 0) {
-			const totalVideoDurationInBuffered = videoBufferedRanges[videoBufferedRanges.length - 1].end - videoBufferedRanges[0].start;
-			const vidRrInBuffered = totalVideoBufferedDuration / totalVideoDurationInBuffered;
-			const totalAudioDurationInBuffered = audioBufferedRanges[audioBufferedRanges.length - 1].end - audioBufferedRanges[0].start;
-			const audioRrInBuffered = totalAudioBufferedDuration / totalAudioDurationInBuffered;
+		
+		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && this.vidRef.currentTime > 0) {
+			const videoBufferedDuration = videoBufferRanges[videoBufferRanges.length - 1].end - videoBufferRanges[0].start;
+			const videoRebufferRatio = videoTotalBufferGapDuration / videoBufferedDuration;
+			const audioBufferedDuration = audioBufferRanges[audioBufferRanges.length - 1].end - audioBufferRanges[0].start;
+			const audioRebufferRatio = audioTotalBufferGapDuration / audioBufferedDuration;
+		
 			console.log(`
 			=-=-=-=-=-=-= Buffering Stats in Buffered =-=-=-=-=-=-=
-			audio total buffered duration: ${totalAudioBufferedDuration}
-			video total buffered duration: ${totalVideoBufferedDuration}
-			audio total duration in buffered: ${totalAudioDurationInBuffered}
-			video total duration in buffered: ${totalVideoDurationInBuffered}
-			audio rebuffering ratio: ${audioRrInBuffered}
-			video rebuffering ratio: ${vidRrInBuffered}
+			Audio Total Gap Duration: ${audioTotalBufferGapDuration}
+			Video Total Gap Duration: ${videoTotalBufferGapDuration}
+			Audio Buffered Duration: ${audioBufferedDuration}
+			Video Buffered Duration: ${videoBufferedDuration}
+			Audio Rebuffering Ratio: ${audioRebufferRatio}
+			Video Rebuffering Ratio: ${videoRebufferRatio}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
-		}
-		console.log(`
+		
+			console.log(`
 			=-=-=-=-=-=-= Total Buffering Stats =-=-=-=-=-=-=
-			audio buffering count: ${this.audio.bufferingCount}
-			video buffering count: ${this.video.bufferingCount}
-			audio total buffering duration: ${this.audio.totalBufferingDuration}
-			video total buffering duration: ${this.video.totalBufferingDuration}
-			audio total rebuffering ratio: ${this.audio.totalBufferingDuration / this.vidRef.currentTime}
-			video total rebuffering ratio: ${this.video.totalBufferingDuration / this.vidRef.currentTime}
+			Audio Buffering Count: ${this.audio.bufferingCount}
+			Video Buffering Count: ${this.video.bufferingCount}
+			Audio Total Buffering Duration: ${this.audio.totalBufferingDuration}
+			Video Total Buffering Duration: ${this.video.totalBufferingDuration}
+			Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / this.vidRef.currentTime}
+			Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / this.vidRef.currentTime}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
-		console.log("video buffered ranges: ", videoBufferedRanges);
-		console.log("audio buffered ranges: ", audioBufferedRanges);
+		
+			console.log("Video Buffered Ranges: ", videoBufferRanges);
+			console.log("Audio Buffered Ranges: ", audioBufferRanges);
+			console.log("adding to buffering logs...")
+			dbStore.addBufferingLogEntry({
+				testId: this.testId,
+				videoTotalBufferGapDuration,
+				audioTotalBufferGapDuration,
+				videoBufferedDuration,
+				audioBufferedDuration,
+				videoRebufferRatio,
+				audioRebufferRatio,
+				audioBufferingCount: this.audio.bufferingCount,
+				videoBufferingCount: this.video.bufferingCount,
+				audioTotalBufferingDuration: this.audio.totalBufferingDuration,
+				videoTotalBufferingDuration: this.video.totalBufferingDuration,
+				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / this.vidRef.currentTime,
+				videoTotalRebufferingRatio: this.video.totalBufferingDuration / this.vidRef.currentTime,
+				timestamp: Date.now()
+			});
+		}
+		
 
 		if (this.isAuto) {
 			const videoBufferLevel = this.bufferLevel.get('video')!;
@@ -1253,6 +1275,19 @@ export class Player {
 			link.click();
 		} else {
 			console.log('no segment logs');
+		}
+		await wait(1);
+
+		const bufferingLogs = await dbStore.getBufferingLogs(this.testId);
+		if (bufferingLogs.length > 0) {
+			const headers = Object.keys(bufferingLogs[0]);
+			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + bufferingLogs.map(e => Object.values(e).join('\t')).join('\n');
+			const encodedUri = encodeURI(csvContent);
+			link.setAttribute('href', encodedUri);
+			link.setAttribute('download', 'buffering_logs_' + this.testId + '.xls');
+			link.click();
+		} else {
+			console.log('no buffering logs');
 		}
 
 		link.remove();
