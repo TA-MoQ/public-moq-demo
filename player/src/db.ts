@@ -1,5 +1,5 @@
 //NOTE: CHANGE VERSION WHEN ADDING NEW OBJECT STORES
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 let db: IDBDatabase;
 let status: 'none' | 'pending' | 'inited' = 'none';
 
