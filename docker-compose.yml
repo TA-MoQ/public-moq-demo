@@ -19,7 +19,6 @@ services:
     volumes:
       - ./cert:/certs
     ports:
-      - "1935:1935"
       - "4443:4443/udp"
   streaming:
     build:
@@ -31,4 +30,4 @@ services:
       - ./cert:/certs
     ports:
       - "1935:1935"
-      - "4443:4443/udp"
+      - "8443:4443/udp"
