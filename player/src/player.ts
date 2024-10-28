@@ -66,6 +66,7 @@ export class Player {
 	latencyData: any[] = [];
 	windowSize: number;
 	isAuto: boolean
+	segmentProcessTimeList: number[];
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -82,6 +83,7 @@ export class Player {
 		this.url = props.url;
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
 		this.windowSize = 25;
+		this.segmentProcessTimeList = new Array<number>();
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -643,7 +645,7 @@ export class Player {
 
 	async handleStream(r: StreamReader) {
 		while (true) {
-			const start = performance.now();
+			const handleSegmentStartTime = performance.now();
 
 			if (await r.done()) {
 				break;
@@ -665,7 +667,7 @@ export class Player {
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
 				// console.log("Msg Segment: ", msg.segment)
-				return this.handleSegment(r, msg.segment, start)
+				return this.handleSegment(r, msg.segment, handleSegmentStartTime)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
 			} 
@@ -1103,6 +1105,12 @@ export class Player {
 			-------------------------------------------
 			`);
 		}
+
+		let segmentProcessTime = (performance.now() - segmentStartOffset)
+		this.segmentProcessTimeList.push(segmentProcessTime)
+		console.warn(
+			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
+		)
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {
@@ -1277,7 +1285,7 @@ export class Player {
 			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + logs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'logs_' + this.testId + '.csv');
+			link.setAttribute('download', getBrowserName() + '_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no logs');
@@ -1290,7 +1298,7 @@ export class Player {
 			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + results.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'bandwidth_' + this.testId + '.csv');
+			link.setAttribute('download', getBrowserName() + '_bandwidth_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no results');
@@ -1304,7 +1312,7 @@ export class Player {
 			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + segmentLogs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'segment_logs_' + this.testId + '.csv');
+			link.setAttribute('download',getBrowserName() + '_segment_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no segment logs');
@@ -1317,12 +1325,18 @@ export class Player {
 			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + bufferingLogs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'buffering_logs_' + this.testId + '.csv');
+			link.setAttribute('download', getBrowserName() + '_buffering_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no buffering logs');
 		}
-	
+		
+		const textContent = 'data:text/plain;charset=utf-8,' + this.segmentProcessTimeList.toString();
+		const encodedUri = encodeURI(textContent);
+		link.setAttribute('href', encodedUri);
+		link.setAttribute('download', getBrowserName() + '_segment_process_time_logs_' + this.testId + '.txt');
+		link.click();
+
 		link.remove();
 	};
 	
@@ -1384,6 +1398,29 @@ function fromCharCodeUint8(uint8arr: any[]) {
 		arr[i] = uint8arr[i];
 	}
 	return String.fromCharCode.apply(null, arr);
+}
+
+function getBrowserName() {
+const userAgent = navigator.userAgent.toLowerCase();
+
+	let browserName;
+	if (userAgent.includes("firefox")) {
+	browserName = "firefox";
+	} else if (userAgent.includes("chrome")) {
+	browserName = "chrome";
+	} else if (userAgent.includes("safari") ) {
+	browserName = "safari";
+	} else if (userAgent.includes("edg")) {
+	browserName = "edge";
+	} else if (userAgent.includes("opera") || userAgent.includes("opr")) {
+	browserName = "opera";
+	} else if (userAgent.includes("trident")) {
+	browserName = "ie";
+	} else {
+	browserName = "Unknown";
+	}
+
+	return browserName
 }
 
 const wait = (second: number) => new Promise(resolve => setTimeout(resolve, 1000 * second));
