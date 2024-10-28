@@ -817,6 +817,7 @@ export class Player {
 						msg_at: msg.at,
 						msg_etp: msg.etp,
 						msg_tc_rate: msg.tc_rate,
+						// msg_representation: msg.representation,
 						perf_now: performance.now().toFixed(2),
 						timestamp: Date.now()
 					});
@@ -975,15 +976,48 @@ export class Player {
 		// // console.log("packets sent:", (await (await this.quic)?.getStats())?.packetsSent)
 		// console.log("stats:", await (await this.quic)?.getStats())
 		// console.log("---------------------------------------------------------------------")
-		// console.log("audio buffered:", this.audio.buffered().ranges);
-		// console.log("video buffered:", this.video.buffered().ranges);
+		const videoBuffered = this.video.buffered();
+		let videoBufferedRanges = [];
+		let totalVideoBufferedDuration = 0;
+		for (let i = 0; i < videoBuffered.length; i++) {
+			videoBufferedRanges.push({start: videoBuffered.start(i), end: videoBuffered.end(i)});
+			if (i > 0) totalVideoBufferedDuration += videoBufferedRanges[i].start - videoBufferedRanges[i-1].end;
+		}
+		
+		const audioBuffered = this.audio.buffered();
+		let audioBufferedRanges = [];
+		let totalAudioBufferedDuration = 0;
+		for (let i = 0; i < audioBuffered.length; i++) {
+			audioBufferedRanges.push({start: audioBuffered.start(i), end: audioBuffered.end(i)});
+			if (i > 0) totalAudioBufferedDuration += audioBufferedRanges[i].start - audioBufferedRanges[i-1].end;
+		}
+		if (videoBufferedRanges.length > 0 && audioBufferedRanges.length > 0) {
+			const totalVideoDurationInBuffered = videoBufferedRanges[videoBufferedRanges.length - 1].end - videoBufferedRanges[0].start;
+			const vidRrInBuffered = totalVideoBufferedDuration / totalVideoDurationInBuffered;
+			const totalAudioDurationInBuffered = audioBufferedRanges[audioBufferedRanges.length - 1].end - audioBufferedRanges[0].start;
+			const audioRrInBuffered = totalAudioBufferedDuration / totalAudioDurationInBuffered;
+			console.log(`
+			=-=-=-=-=-=-= Buffering Stats in Buffered =-=-=-=-=-=-=
+			audio total buffered duration: ${totalAudioBufferedDuration}
+			video total buffered duration: ${totalVideoBufferedDuration}
+			audio total duration in buffered: ${totalAudioDurationInBuffered}
+			video total duration in buffered: ${totalVideoDurationInBuffered}
+			audio rebuffering ratio: ${audioRrInBuffered}
+			video rebuffering ratio: ${vidRrInBuffered}
+			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+		}
 		console.log(`
-			=-=-=-=-=-=-= Buffering Stats =-=-=-=-=-=-=-=
-			audio buffering count:, ${this.audio.bufferingCount});
-			video buffering count:, ${this.video.bufferingCount});
-			audio total buffering duration:, ${this.audio.totalBufferingDuration});
-			video total buffering duration:, ${this.video.totalBufferingDuration});
-			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+			=-=-=-=-=-=-= Total Buffering Stats =-=-=-=-=-=-=
+			audio buffering count: ${this.audio.bufferingCount}
+			video buffering count: ${this.video.bufferingCount}
+			audio total buffering duration: ${this.audio.totalBufferingDuration}
+			video total buffering duration: ${this.video.totalBufferingDuration}
+			audio total rebuffering ratio: ${this.audio.totalBufferingDuration / this.vidRef.currentTime}
+			video total rebuffering ratio: ${this.video.totalBufferingDuration / this.vidRef.currentTime}
+			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+		console.log("video buffered ranges: ", videoBufferedRanges);
+		console.log("audio buffered ranges: ", audioBufferedRanges);
+
 		if (this.isAuto) {
 			const videoBufferLevel = this.bufferLevel.get('video')!;
 			const audioBufferLevel = this.bufferLevel.get('audio')!;

@@ -394,8 +394,8 @@ const startPlotting = () => {
         } as Plotly.Data;
 
         Plotly.update(document.getElementById('plot') as Plotly.Root, data_update, plotLayout)
-        Plotly.update(document.getElementById('plot_latency') as Plotly.Root, data_latency_update, plotLayout)
-        Plotly.update(document.getElementById('plot_throughput') as Plotly.Root, data_throughput_update, plotLayout)
+        Plotly.update(document.getElementById('plot_latency') as Plotly.Root, data_latency_update, plotLayoutLatency)
+        Plotly.update(document.getElementById('plot_throughput') as Plotly.Root, data_throughput_update, plotLayoutThroughput)
     }, playerRefreshInterval);
 };
 
