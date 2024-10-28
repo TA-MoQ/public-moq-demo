@@ -3,4 +3,4 @@
 rm -rf dist
 rm -rf .parcel-cache/
 
-npm run localtest
+npm run build
