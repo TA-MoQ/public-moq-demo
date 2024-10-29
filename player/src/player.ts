@@ -64,7 +64,9 @@ export class Player {
 	segmentTestId: string;
 	fragment: FragmentedMessageHandler
 	latencyData: any[] = [];
+	windowSize: number;
 	isAuto: boolean
+	segmentProcessTimeList: number[];
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -80,6 +82,8 @@ export class Player {
 		this.totalSizeProcessed = 0;
 		this.url = props.url;
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
+		this.windowSize = 25;
+		this.segmentProcessTimeList = new Array<number>();
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -641,7 +645,7 @@ export class Player {
 
 	async handleStream(r: StreamReader) {
 		while (true) {
-			const start = performance.now();
+			const handleSegmentStartTime = performance.now();
 
 			if (await r.done()) {
 				break;
@@ -663,7 +667,7 @@ export class Player {
 				return this.handleInit(r, msg.init)
 			} else if (msg.segment) {
 				// console.log("Msg Segment: ", msg.segment)
-				return this.handleSegment(r, msg.segment, start)
+				return this.handleSegment(r, msg.segment, handleSegmentStartTime)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
 			} 
@@ -748,16 +752,19 @@ export class Player {
 		let totalSegmentSize = 0;
 		const segmentDownloadStart = performance.now()
 		let chunkLatencies = [];
+		let chunkJitters = [];
 		let chunkCounter = 0;
 		let isVideoSegment = init.info.videoTracks.length > 0;
 		let lastMoofSize = 0;
-		let lastMoofStartTime = 0;
+		let lastMoofStartTime = performance.now();
 		let lastMoofDownloadDuration = 0;
 		let lastMoofClockTime = 0;
 		let totalChunkSize = 0;
 		let moofClockTime = 0;
 		let chunkEnd = 0;
 		let boxStartTime;
+
+		let lastMoofDifferenceTime = 0;
 		// One day I'll figure it out; until then read one top-level atom at a time
 		let count = 1
 		while (true) {
@@ -781,10 +788,29 @@ export class Player {
 				if (boxType === 'moof') {
 					chunkCounter++;
 					lastMoofSize = size;
+					lastMoofDifferenceTime = boxStartOffset - lastMoofStartTime;
 					lastMoofStartTime = boxStartOffset;
 					lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
 					lastMoofClockTime = Date.now();
 					moofClockTime = performance.now();
+
+					chunkLatencies.push(lastMoofDifferenceTime);
+					if (chunkLatencies.length > 1) {
+						let endPos = chunkLatencies.length-1;
+						let jitter = chunkLatencies[endPos] - chunkLatencies[endPos - 1]
+						if (jitter < 0 ){
+						jitter = 0	
+						}
+						chunkJitters.push(jitter)
+						// let latency = Math.abs(chunkLatencies[lastData] - chunkLatencies[lastData - 1]);
+						// this.latencyData.push(latency)
+						// console.log(latency, "LATENCY")	
+						//SWMA Latency
+						let windowStart = Math.max(0, chunkLatencies.length - this.windowSize);
+						let windowData = chunkLatencies.slice(windowStart)
+						let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
+						this.throughputs.set('SWMALatency', windowSum/windowData.length);
+					}
 				} else if (boxType === 'mdat') {
 					const chunkDownloadDuration = performance.now() - boxStartOffset;
 					const chunkSize = size + lastMoofSize; // bytes
@@ -795,7 +821,8 @@ export class Player {
 					// console.log("CHUNK DOWNLOAD SPEED", chunkDownloadSpeed)
 					// console.log("CHUNK DOWNLOAD SPEED IN MBPS", chunkDownloadSpeedInMbps)
 					totalChunkSize += chunkSize;
-					const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+					// const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+					const chunkLatency = lastMoofClockTime
 					if (chunkCounter === 1) {
 						console.log("LATENCY", chunkCounter, chunkLatency, chunkSize)
 					}
@@ -825,18 +852,18 @@ export class Player {
 
 					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
 					this.chunkStats.push(stat);
-					chunkLatencies.push(chunkLatency);
-					if (chunkLatencies.length > 1) {
-						let lastData = chunkLatencies.length-1;
-						let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
-						this.latencyData.push(latency)
-						// console.log(latency, "LATENCY")
-						//SWMA Latency
-						let windowStart = Math.max(0, this.latencyData.length - 25);
-						let windowData = this.latencyData.slice(windowStart)
-						let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
-						this.throughputs.set('SWMALatency', windowSum/windowData.length);
-					}
+					// chunkLatencies.push(chunkLatency);
+					// if (chunkLatencies.length > 1) {
+					// 	let lastData = chunkLatencies.length-1;
+					// 	let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
+					// 	this.latencyData.push(latency)
+					// 	// console.log(latency, "LATENCY")
+					// 	//SWMA Latency
+					// 	let windowStart = Math.max(0, this.latencyData.length - 25);
+					// 	let windowData = this.latencyData.slice(windowStart)
+					// 	let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
+					// 	this.throughputs.set('SWMALatency', windowSum/windowData.length);
+					// }
 					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
 					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
 					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
@@ -863,23 +890,24 @@ export class Player {
 			segment.push(atom)
 			track.flush() // Flushes if the active segment has new samples
 		}
-		// console.log("msg", msg)
+		console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
-		let avgSegmentLatency2;
+		let avgLastSegmentJitter;
 		if(msg.init!= '4'){
-			avgLastSegmentLatency = this.calculateAverageChunkLatency(chunkLatencies).toFixed(2);
-			avgSegmentLatency2 = this.calculateAverageChunkLatency2(chunkLatencies).toFixed(2);
+			avgLastSegmentLatency = this.calculateAverage(chunkLatencies).toFixed(2);
+			avgLastSegmentJitter = this.calculateAverage(chunkJitters).toFixed(2);
 			console.log(`
 						=====================================================
 						msg init: ${msg.init}
 						segment timestamp : ${msg.timestamp}
-						total chunk latency : ${chunkLatencies.join(', ')}
+						chunk latencies : ${chunkLatencies.join(', ')}
 						average chunk latency : ${avgLastSegmentLatency}
-						average chunk latency2 : ${avgLastSegmentLatency}
+						average chunk jitter : ${avgLastSegmentJitter}
 						=====================================================
 						`);
 			this.throughputs.set('avgSegmentLatency', Number(avgLastSegmentLatency));
+			this.throughputs.set('avgSegmentJitter', Number(avgLastSegmentJitter));
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
@@ -906,7 +934,7 @@ export class Player {
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
 						latency: avgLastSegmentLatency,
-						latency2: avgSegmentLatency2,
+						jitter: avgLastSegmentJitter,
 						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
@@ -924,7 +952,7 @@ export class Player {
 						totalChunks: chunkCounter,
 						size: totalSegmentSize,
 						latency: avgLastSegmentLatency,
-						latency2: avgSegmentLatency2,
+						jitter: avgLastSegmentJitter,
 						latencyFirstChunk: chunkLatencies[0],
 						startTime: segmentStartTime,
 						endTime: segmentDateFinish,
@@ -992,7 +1020,7 @@ export class Player {
 			if (i > 0) audioTotalBufferGapDuration += audioBufferRanges[i].start - audioBufferRanges[i - 1].end;
 		}
 		
-		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && this.vidRef.currentTime > 0) {
+		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && this.timeRef !== undefined) {
 			const videoBufferedDuration = videoBufferRanges[videoBufferRanges.length - 1].end - videoBufferRanges[0].start;
 			const videoRebufferRatio = videoTotalBufferGapDuration / videoBufferedDuration;
 			const audioBufferedDuration = audioBufferRanges[audioBufferRanges.length - 1].end - audioBufferRanges[0].start;
@@ -1007,15 +1035,18 @@ export class Player {
 			Audio Rebuffering Ratio: ${audioRebufferRatio}
 			Video Rebuffering Ratio: ${videoRebufferRatio}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+
+			const elapsedTime = (performance.now() - this.timeRef) / 1000; // in seconds
 		
 			console.log(`
 			=-=-=-=-=-=-= Total Buffering Stats =-=-=-=-=-=-=
+			Elapsed Time: ${elapsedTime}
 			Audio Buffering Count: ${this.audio.bufferingCount}
 			Video Buffering Count: ${this.video.bufferingCount}
 			Audio Total Buffering Duration: ${this.audio.totalBufferingDuration}
 			Video Total Buffering Duration: ${this.video.totalBufferingDuration}
-			Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / this.vidRef.currentTime}
-			Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / this.vidRef.currentTime}
+			Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / elapsedTime}
+			Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / elapsedTime}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 		
 			console.log("Video Buffered Ranges: ", videoBufferRanges);
@@ -1023,6 +1054,9 @@ export class Player {
 			console.log("adding to buffering logs...")
 			dbStore.addBufferingLogEntry({
 				testId: this.testId,
+				timestamp: Date.now(),
+				type: this.currCategory,
+				elapsedTime,
 				videoTotalBufferGapDuration,
 				audioTotalBufferGapDuration,
 				videoBufferedDuration,
@@ -1033,9 +1067,8 @@ export class Player {
 				videoBufferingCount: this.video.bufferingCount,
 				audioTotalBufferingDuration: this.audio.totalBufferingDuration,
 				videoTotalBufferingDuration: this.video.totalBufferingDuration,
-				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / this.vidRef.currentTime,
-				videoTotalRebufferingRatio: this.video.totalBufferingDuration / this.vidRef.currentTime,
-				timestamp: Date.now()
+				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / elapsedTime,
+				videoTotalRebufferingRatio: this.video.totalBufferingDuration / elapsedTime,
 			});
 		}
 		
@@ -1072,6 +1105,12 @@ export class Player {
 			-------------------------------------------
 			`);
 		}
+
+		let segmentProcessTime = (performance.now() - segmentStartOffset)
+		this.segmentProcessTimeList.push(segmentProcessTime)
+		console.warn(
+			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
+		)
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {
@@ -1125,13 +1164,13 @@ export class Player {
 		//console.log('computeTPut | after filtering: chunk count: %d', filteredStats.length);
 		return filteredStats;
 	}
-	calculateAverageChunkLatency(arrivalTimes: number[]): number {
+	calculate(arrivalTimes: number[]): number {
 		// Array to store calculated chunk latencies
 		let chunkLatencies: number[] = [];
 	
 		// Loop through the arrival times and calculate the differences
 		for (let i = 1; i < arrivalTimes.length; i++) {
-			let latency = arrivalTimes[i] - arrivalTimes[i - 1];
+			let latency = Math.abs(arrivalTimes[i] - arrivalTimes[i - 1]);
 			chunkLatencies.push(latency);
 		}
 	
@@ -1142,17 +1181,21 @@ export class Player {
 		return averageLatency;
 	}
 
-	calculateAverageChunkLatency2(latencies: number[]): number {	
-		// Calculate the average latency
-		let totalLatency = 0;
+	// calculateAverageChunkJitter2(chunkLatencies: number[]): number {
+	// 	return this.calculateAverageChunkLatency(chunkLatencies);
+	// }
 
-		for (let i = 0; i < latencies.length; i++) {
-			totalLatency += latencies[i]
+	calculateAverage(arr: number[]): number {	
+		// Calculate the average latency
+		let sum = 0;
+
+		for (let i = 0; i < arr.length; i++) {
+			sum += arr[i]
 		}
 
-		const averageLatency = totalLatency / latencies.length;
+		const avg = sum / arr.length;
 	
-		return averageLatency;
+		return avg;
 	}
 
 	computeTPut = (stats: any[]) => {
@@ -1231,67 +1274,72 @@ export class Player {
 
 	downloadStats = async (testId?: string) => {
 		console.log('in downloadStats');
-
+	
 		const link = document.createElement('a');
 		document.body.appendChild(link);
-
-		// download logs
-
-
+	
+		// Download logs
 		const logs = await dbStore.getLogs(testId || this.testId);
 		if (logs.length > 0) {
 			const headers = Object.keys(logs[0]);
-			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + logs.map(e => Object.values(e).join('\t')).join('\n');
+			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + logs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'logs_' + this.testId + '.xls');
+			link.setAttribute('download', getBrowserName() + '_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no logs');
 		}
 		await wait(1);
-
+	
 		const results = await dbStore.getResults(testId || this.testId);
 		if (results.length > 0) {
 			const headers = Object.keys(results[0]);
-			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + results.map(e => Object.values(e).join('\t')).join('\n');
+			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + results.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'bandwidth_' + this.testId + '.xls');
+			link.setAttribute('download', getBrowserName() + '_bandwidth_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no results');
 		}
 		await wait(1);
-
-		//download segment stats
+	
+		// Download segment stats
 		const segmentLogs = await dbStore.getSegmentLogs(this.segmentTestId);
 		if (segmentLogs.length > 0) {
 			const headers = Object.keys(segmentLogs[0]);
-			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + segmentLogs.map(e => Object.values(e).join('\t')).join('\n');
+			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + segmentLogs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'segment_logs_' + this.testId + '.xls');
+			link.setAttribute('download',getBrowserName() + '_segment_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no segment logs');
 		}
 		await wait(1);
-
+	
 		const bufferingLogs = await dbStore.getBufferingLogs(this.testId);
 		if (bufferingLogs.length > 0) {
 			const headers = Object.keys(bufferingLogs[0]);
-			const csvContent = 'data:application/vnd.ms-excel;charset=utf-8,' + headers.join('\t') + '\n' + bufferingLogs.map(e => Object.values(e).join('\t')).join('\n');
+			const csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + bufferingLogs.map(e => Object.values(e).join(',')).join('\n');
 			const encodedUri = encodeURI(csvContent);
 			link.setAttribute('href', encodedUri);
-			link.setAttribute('download', 'buffering_logs_' + this.testId + '.xls');
+			link.setAttribute('download', getBrowserName() + '_buffering_logs_' + this.testId + '.csv');
 			link.click();
 		} else {
 			console.log('no buffering logs');
 		}
+		
+		const textContent = 'data:text/plain;charset=utf-8,' + this.segmentProcessTimeList.toString();
+		const encodedUri = encodeURI(textContent);
+		link.setAttribute('href', encodedUri);
+		link.setAttribute('download', getBrowserName() + '_segment_process_time_logs_' + this.testId + '.txt');
+		link.click();
 
 		link.remove();
 	};
+	
 
 	visualizeBuffer(bufferContainer: HTMLElement, durationEl: HTMLElement, bufferType: 'audio' | 'video', ranges: TimeRanges) {
 		// bufferContainer.innerHTML = ""
@@ -1350,6 +1398,29 @@ function fromCharCodeUint8(uint8arr: any[]) {
 		arr[i] = uint8arr[i];
 	}
 	return String.fromCharCode.apply(null, arr);
+}
+
+function getBrowserName() {
+const userAgent = navigator.userAgent.toLowerCase();
+
+	let browserName;
+	if (userAgent.includes("firefox")) {
+	browserName = "firefox";
+	} else if (userAgent.includes("chrome")) {
+	browserName = "chrome";
+	} else if (userAgent.includes("safari") ) {
+	browserName = "safari";
+	} else if (userAgent.includes("edg")) {
+	browserName = "edge";
+	} else if (userAgent.includes("opera") || userAgent.includes("opr")) {
+	browserName = "opera";
+	} else if (userAgent.includes("trident")) {
+	browserName = "ie";
+	} else {
+	browserName = "Unknown";
+	}
+
+	return browserName
 }
 
 const wait = (second: number) => new Promise(resolve => setTimeout(resolve, 1000 * second));
