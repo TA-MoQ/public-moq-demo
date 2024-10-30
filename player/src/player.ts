@@ -919,6 +919,12 @@ export class Player {
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
+		let segmentProcessTime = (performance.now() - segmentStartOffset)
+		this.segmentProcessTimeList.push(segmentProcessTime)
+		console.warn(
+			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
+		)
+
 		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;
 		let serverBandwidthInMegabits = (serverBandwidth / 1000000).toFixed(3);
@@ -1180,12 +1186,6 @@ export class Player {
 			-------------------------------------------
 			`);
 		}
-
-		let segmentProcessTime = (performance.now() - segmentStartOffset)
-		this.segmentProcessTimeList.push(segmentProcessTime)
-		console.warn(
-			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
-		)
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {
@@ -1406,7 +1406,7 @@ export class Player {
 			console.log('no buffering logs');
 		}
 		
-		const textContent = 'data:text/plain;charset=utf-8,' + this.segmentProcessTimeList.toString();
+		const textContent = 'data:text/csv;charset=utf-8,' + this.segmentProcessTimeList.toString();
 		const encodedUri = encodeURI(textContent);
 		link.setAttribute('href', encodedUri);
 		link.setAttribute('download', getBrowserName() + '_segment_process_time_logs_' + this.testId + '.txt');
