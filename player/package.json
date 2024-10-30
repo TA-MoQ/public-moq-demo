@@ -1,12 +1,14 @@
 {
   "source": "src/index.html",
   "scripts": {
-    "prodtest": "parcel serve --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem",
-    "localtest": "parcel serve --https --cert ../cert/cert.pem --key ../cert/key.pem",
-    "serve": "serve -s dist --ssl-cert ../cert/cert.pem --ssl-key ../cert/key.pem",
-    "build": "parcel build --no-optimize src/index.html src/appsettings.js",
+    "build-dev": "parcel build --no-optimize src/index.html src/appsettings.js",
+    "build": "parcel build src/index.html src/appsettings.js",
     "check": "tsc --noEmit",
-    "deploy": "npm run build && serve -s dist --ssl-cert /etc/letsencrypt/live/<domainname>/fullchain.pem --ssl-key /etc/letsencrypt/live/<domainname>/privkey.pem"
+    "deploy": "npm run build && serve -s dist --ssl-cert /etc/letsencrypt/live/<domainname>/fullchain.pem --ssl-key /etc/letsencrypt/live/<domainname>/privkey.pem",
+    "localtest": "parcel serve --https --cert ../cert/cert.pem --key ../cert/key.pem",
+    "prodtest": "parcel serve --cert /etc/letsencrypt/live/<domainname>/fullchain.pem --key /etc/letsencrypt/live/<domainname>/privkey.pem",
+    "serve": "serve -l tcp://0.0.0.0:3000 -s dist --ssl-cert ../cert/cert.pem --ssl-key ../cert/key.pem",
+    "dev": "npm run build-dev && npm run serve"
   },
   "devDependencies": {
     "@parcel/validator-typescript": "^2.6.0",
