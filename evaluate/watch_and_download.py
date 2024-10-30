@@ -2,12 +2,13 @@ import asyncio
 from playwright.async_api import async_playwright, expect
 from enum import IntEnum
 import os
+import time
 
 result_path = "./downloads"
 download_timeout = 200000
 
 urls = [
-    "https://localhost:1234/?url=https://moq.rorre.me:4443",
+    # "https://localhost:1234/?url=https://moq.rorre.me:4443",
     "https://localhost:1234/?url=https://localhost:4443",
     "https://localhost:1234/?url=https://localhost:8443",
     # "https://localhost:1234/?url=https://moq.rorre.me:8443",
@@ -22,9 +23,9 @@ class StreamMode(IntEnum):
 
 
 async def download_results(page, mode, url):
-    download_path = os.path.join(result_path, mode)
     server_url = url.split("?url=")[-1]
     server_domain = server_url.strip("https://").replace(":", "_").replace(".", "_")
+    download_path = os.path.join(result_path, mode, server_domain)
 
     print(
         f"Awaiting for download results to {download_path} for {mode} in {server_domain}..."
@@ -34,12 +35,10 @@ async def download_results(page, mode, url):
     os.makedirs(os.path.join(download_path), exist_ok=True)
 
     downloads = []
-    for i in range(4):
+    for i in range(5):
         try:
             download = await page.wait_for_event("download", timeout=download_timeout)
-            file_path = os.path.join(
-                download_path, f"{mode}_{server_domain}_{download.suggested_filename}"
-            )
+            file_path = os.path.join(download_path, download.suggested_filename)
             # Store the download promise instead of awaiting it immediately
             downloads.append(download.save_as(file_path))
             print(f"Download {i+1} started at {file_path}")
@@ -96,6 +95,7 @@ async def process_url(url, browser):
 
 
 async def main():
+    start_time = time.time()
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(
             args=[
@@ -122,6 +122,7 @@ async def main():
             raise
         finally:
             await browser.close()
+            print(f"Total execution time: {time.time() - start_time} seconds")
 
 
 if __name__ == "__main__":

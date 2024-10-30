@@ -1,1 +1,2 @@
-del .\downloads\*\*
+del .\downloads\*\*\*.csv
+del .\downloads\*\*\*.txt
