@@ -67,6 +67,11 @@ export class Player {
 	windowSize: number;
 	isAuto: boolean
 	segmentProcessTimeList: number[];
+	totalBufferingDuration: number;
+	totalBufferingCount: number;
+
+	// Track the latest end time to prevent recounting gaps
+	latestBufferedEnd: number;
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -84,6 +89,9 @@ export class Player {
 		this.activeBWTestInterval = props.activeBWTestInterval * 1000 || 0;
 		this.windowSize = 25;
 		this.segmentProcessTimeList = new Array<number>();
+		this.totalBufferingDuration = 0;
+		this.totalBufferingCount = 0;
+		this.latestBufferedEnd = 0;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -1006,69 +1014,136 @@ export class Player {
 		// console.log("---------------------------------------------------------------------")
 		const videoBuffer = this.video.buffered();
 		let videoBufferRanges = [];
-		let videoTotalBufferGapDuration = 0;
+		let videoBufferGaps = [];
+		let videoBufferingDurationInBuffered = 0;
 		for (let i = 0; i < videoBuffer.length; i++) {
 			videoBufferRanges.push({ start: videoBuffer.start(i), end: videoBuffer.end(i) });
-			if (i > 0) videoTotalBufferGapDuration += videoBufferRanges[i].start - videoBufferRanges[i - 1].end;
+			if (i > 0) {
+				videoBufferingDurationInBuffered += videoBufferRanges[i].start - videoBufferRanges[i - 1].end;
+				videoBufferGaps.push({ start: videoBufferRanges[i - 1].end, end: videoBufferRanges[i].start });
+			}
 		}
 		
 		const audioBuffer = this.audio.buffered();
 		let audioBufferRanges = [];
-		let audioTotalBufferGapDuration = 0;
+		let audioBufferGaps = [];
+		let audioBufferingDurationInBuffered = 0;
 		for (let i = 0; i < audioBuffer.length; i++) {
 			audioBufferRanges.push({ start: audioBuffer.start(i), end: audioBuffer.end(i) });
-			if (i > 0) audioTotalBufferGapDuration += audioBufferRanges[i].start - audioBufferRanges[i - 1].end;
+			if (i > 0) {
+				audioBufferingDurationInBuffered += audioBufferRanges[i].start - audioBufferRanges[i - 1].end;
+				audioBufferGaps.push({ start: audioBufferRanges[i - 1].end, end: audioBufferRanges[i].start });
+			}
 		}
+		const elapsedTime = (performance.now() - this.timeRef!) / 1000; // in seconds
 		
-		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && this.timeRef !== undefined) {
-			const videoBufferedDuration = videoBufferRanges[videoBufferRanges.length - 1].end - videoBufferRanges[0].start;
-			const videoRebufferRatio = videoTotalBufferGapDuration / videoBufferedDuration;
-			const audioBufferedDuration = audioBufferRanges[audioBufferRanges.length - 1].end - audioBufferRanges[0].start;
-			const audioRebufferRatio = audioTotalBufferGapDuration / audioBufferedDuration;
+		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && elapsedTime !== undefined && elapsedTime > 0) {
+			const videoDurationInBuffered = videoBufferRanges[videoBufferRanges.length - 1].end - videoBufferRanges[0].start;
+			const videoRebufferingRatioInBuffered = videoBufferingDurationInBuffered / videoDurationInBuffered;
+			const videoBufferingCountInBuffered = videoBufferRanges.length - 1;
+			const audioDurationInBuffered = audioBufferRanges[audioBufferRanges.length - 1].end - audioBufferRanges[0].start;
+			const audioRebufferingRatioInBuffered = audioBufferingDurationInBuffered / audioDurationInBuffered;
+			const audioBufferingCountInBuffered = audioBufferRanges.length - 1;
 		
-			console.log(`
-			=-=-=-=-=-=-= Buffering Stats in Buffered =-=-=-=-=-=-=
-			Audio Total Gap Duration: ${audioTotalBufferGapDuration}
-			Video Total Gap Duration: ${videoTotalBufferGapDuration}
-			Audio Buffered Duration: ${audioBufferedDuration}
-			Video Buffered Duration: ${videoBufferedDuration}
-			Audio Rebuffering Ratio: ${audioRebufferRatio}
-			Video Rebuffering Ratio: ${videoRebufferRatio}
-			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+			// console.log(`
+			// =-=-=-=-=-=-= Buffering Stats in Buffered =-=-=-=-=-=-=
+			// Audio Buffering Count: ${audioBufferingCountInBuffered}
+			// Video Buffering Count: ${videoBufferingCountInBuffered}
+			// Audio Buffering Duration: ${audioBufferingDurationInBuffered}
+			// Video Buffering Duration: ${videoBufferingDurationInBuffered}
+			// Audio Buffered Duration: ${audioDurationInBuffered}
+			// Video Buffered Duration: ${videoDurationInBuffered}
+			// Audio Rebuffering Ratio: ${audioRebufferingRatioInBuffered}
+			// Video Rebuffering Ratio: ${videoRebufferingRatioInBuffered}
+			// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+		
+			// console.log(`
+			// =-=-=-=-=-=-= Total Buffering Stats =-=-=-=-=-=-=
+			// Elapsed Time: ${elapsedTime}
+			// Audio Buffering Count: ${this.audio.bufferingCount}
+			// Video Buffering Count: ${this.video.bufferingCount}
+			// Audio Total Buffering Duration: ${this.audio.totalBufferingDuration}
+			// Video Total Buffering Duration: ${this.video.totalBufferingDuration}
+			// Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / elapsedTime}
+			// Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / elapsedTime}
+			// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+		
+			let combinedGaps = [...videoBufferGaps, ...audioBufferGaps];
+			combinedGaps.sort((a, b) => a.start - b.start);
+			// console.log("Combined Gaps: ", combinedGaps);
+			if (combinedGaps.length > 0) {
+				let bufferingGaps = [];
+				let bufferingDuration = 0;
+				let bufferingCount = 0;
 
-			const elapsedTime = (performance.now() - this.timeRef) / 1000; // in seconds
-		
+				// merge overlapping gaps
+				for (let i = 0; i < combinedGaps.length; i++) {
+					if (bufferingGaps.length === 0) {
+						bufferingGaps.push(combinedGaps[i]);
+					} else {
+						const lastGap = bufferingGaps[bufferingGaps.length - 1];
+						if (combinedGaps[i].start <= lastGap.end) {
+							bufferingGaps[bufferingGaps.length - 1].end = Math.max(lastGap.end, combinedGaps[i].end);
+						} else {
+							bufferingDuration += lastGap.end - lastGap.start;
+							if (lastGap.end > this.latestBufferedEnd) {
+								this.totalBufferingCount++;
+								this.totalBufferingDuration += lastGap.end - lastGap.start;
+								this.latestBufferedEnd = lastGap.end;
+							}
+							bufferingGaps.push(combinedGaps[i]);
+						}
+					}
+				}
+				const lastGap = bufferingGaps[bufferingGaps.length - 1];
+				if (lastGap.end > this.latestBufferedEnd) {
+					this.totalBufferingCount++;
+					this.totalBufferingDuration += lastGap.end - lastGap.start;
+					this.latestBufferedEnd = lastGap.end;
+				}
+				bufferingDuration += lastGap.end - lastGap.start;
+				bufferingCount = bufferingGaps.length;
+
+				// console.log("Buffering Gaps: ", bufferingGaps);
+				// console.log("Buffering Duration: ", bufferingDuration);
+				// console.log("Buffering Count: ", bufferingCount);
+			}
+			// console.log("Video Buffered Ranges: ", videoBufferRanges);
+			// console.log("Audio Buffered Ranges: ", audioBufferRanges);
+
 			console.log(`
-			=-=-=-=-=-=-= Total Buffering Stats =-=-=-=-=-=-=
+			=-=-=-=-=-=-= Overall Buffering Stats =-=-=-=-=-=-=
 			Elapsed Time: ${elapsedTime}
-			Audio Buffering Count: ${this.audio.bufferingCount}
-			Video Buffering Count: ${this.video.bufferingCount}
-			Audio Total Buffering Duration: ${this.audio.totalBufferingDuration}
-			Video Total Buffering Duration: ${this.video.totalBufferingDuration}
-			Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / elapsedTime}
-			Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / elapsedTime}
-			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
-		
-			console.log("Video Buffered Ranges: ", videoBufferRanges);
-			console.log("Audio Buffered Ranges: ", audioBufferRanges);
-			console.log("adding to buffering logs...")
+			Total Buffering Count: ${this.totalBufferingCount}
+			Total Buffering Duration: ${this.totalBufferingDuration}
+			Total Rebuffering Ratio: ${this.totalBufferingDuration / elapsedTime}
+			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
+			// console.log("adding to buffering logs...")
 			dbStore.addBufferingLogEntry({
 				testId: this.testId,
 				timestamp: Date.now(),
 				type: this.currCategory,
 				elapsedTime,
-				videoTotalBufferGapDuration,
-				audioTotalBufferGapDuration,
-				videoBufferedDuration,
-				audioBufferedDuration,
-				videoRebufferRatio,
-				audioRebufferRatio,
+				// buffered stats (last ~30 secs)
+				videoBufferingCountInBuffered,
+				audioBufferingCountInBuffered,
+				videoBufferingDurationInBuffered,
+				audioBufferingDurationInBuffered,
+				videoDurationInBuffered,
+				audioDurationInBuffered,
+				videoRebufferingRatioInBuffered,
+				audioRebufferingRatioInBuffered,
+				// total stats (From the start, not considering both video and audio)
 				audioBufferingCount: this.audio.bufferingCount,
 				videoBufferingCount: this.video.bufferingCount,
 				audioTotalBufferingDuration: this.audio.totalBufferingDuration,
 				videoTotalBufferingDuration: this.video.totalBufferingDuration,
 				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / elapsedTime,
 				videoTotalRebufferingRatio: this.video.totalBufferingDuration / elapsedTime,
+				// overall stats from the start (considering both video and audio)
+				overallBufferingCount: this.totalBufferingCount,
+				overallBufferingDuration: this.totalBufferingDuration,
+				overallRebufferingRatio: this.totalBufferingDuration / elapsedTime,
 			});
 		}
 		

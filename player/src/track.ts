@@ -18,7 +18,7 @@ export class Track {
   totalBufferingDuration: number;
 
   // Track the latest end time to prevent recounting gaps
-  private latestBufferedEnd: number;
+  latestBufferedEnd: number;
 
   constructor(source: Source, type: "audio" | "video") {
     this.type = type;
