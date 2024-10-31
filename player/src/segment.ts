@@ -79,32 +79,33 @@ export class Segment {
 	// Flushes any pending samples, returning true if the stream has finished.
 	flush(): boolean {
 		let stream = new MP4Stream(new ArrayBuffer(0), 0, false); // big-endian
-
+	
 		while (this.samples.length) {
-			// Keep a single sample if we're not done yet
-			if (!this.done && this.samples.length < 2) break;
-
-			const sample = this.samples.shift()
+			// Process each sample individually to allow immediate playback
+			const sample = this.samples.shift();
 			if (!sample) break;
-
+	
 			let moof = this.output.createSingleSampleMoof(sample);
 			moof.write(stream);
-
-			// adjusting the data_offset now that the moof size is known
-			moof.trafs[0].truns[0].data_offset = moof.size+8; //8 is mdat header
+	
+			// Adjusting the data_offset now that the moof size is known
+			moof.trafs[0].truns[0].data_offset = moof.size + 8; // 8 is mdat header
 			stream.adjustUint32(moof.trafs[0].truns[0].data_offset_position, moof.trafs[0].truns[0].data_offset);
-
-			// @ts-ignore
-			var mdat = new MP4Parser.mdatBox();
+	
+			// Creating mdat box
+			//@ts-ignore
+			const mdat = new MP4Parser.mdatBox();
 			mdat.data = sample.data;
 			mdat.write(stream);
+	
+			// Append the generated chunk immediately for progressive playback
+			this.source.initialize(this.init);
+			this.source.append(stream.buffer as ArrayBuffer);
 		}
-
-		this.source.initialize(this.init)
-		this.source.append(stream.buffer as ArrayBuffer)
-
-		return this.done
+	
+		return this.done;
 	}
+	
 
 	// The segment has completed
 	finish() {

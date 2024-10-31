@@ -786,6 +786,9 @@ export class Player {
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
 			// console.log(size)
 			const atom = await stream.bytes(size)
+			segment.push(atom)
+			segment.flush()
+			// track.flush() // Flushes if the active segment has new samples
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
 			// first 4 bytes => size
@@ -895,8 +898,6 @@ export class Player {
 			if (segmentTPut > 0) {
 				this.throughputs.set('chunk', segmentTPut);
 			}
-			segment.push(atom)
-			track.flush() // Flushes if the active segment has new samples
 		}
 		console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
@@ -919,6 +920,12 @@ export class Player {
 		}
 		// console.log('avgSegmentLatency: %d', avgSegmentLatency);
 		segment.finish()
+		let segmentProcessTime = (performance.now() - segmentStartOffset)
+		this.segmentProcessTimeList.push(segmentProcessTime)
+		console.warn(
+			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
+		)
+
 		let segmentFinishTime = Date.now();
 		let serverBandwidth = this.serverBandwidth;
 		let serverBandwidthInMegabits = (serverBandwidth / 1000000).toFixed(3);
@@ -1180,12 +1187,6 @@ export class Player {
 			-------------------------------------------
 			`);
 		}
-
-		let segmentProcessTime = (performance.now() - segmentStartOffset)
-		this.segmentProcessTimeList.push(segmentProcessTime)
-		console.warn(
-			"[1-Segment Handle Time]", `${segmentProcessTime} ms`
-		)
 	}
 
 	logChunkStats = (filteredChunkStats: any[]) => {
@@ -1406,7 +1407,7 @@ export class Player {
 			console.log('no buffering logs');
 		}
 		
-		const textContent = 'data:text/plain;charset=utf-8,' + this.segmentProcessTimeList.toString();
+		const textContent = 'data:text/csv;charset=utf-8,' + this.segmentProcessTimeList.toString();
 		const encodedUri = encodeURI(textContent);
 		link.setAttribute('href', encodedUri);
 		link.setAttribute('download', getBrowserName() + '_segment_process_time_logs_' + this.testId + '.txt');
