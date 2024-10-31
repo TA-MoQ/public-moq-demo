@@ -786,6 +786,9 @@ export class Player {
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
 			// console.log(size)
 			const atom = await stream.bytes(size)
+			segment.push(atom)
+			segment.flush()
+			// track.flush() // Flushes if the active segment has new samples
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
 			// first 4 bytes => size
@@ -895,8 +898,6 @@ export class Player {
 			if (segmentTPut > 0) {
 				this.throughputs.set('chunk', segmentTPut);
 			}
-			segment.push(atom)
-			track.flush() // Flushes if the active segment has new samples
 		}
 		console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
