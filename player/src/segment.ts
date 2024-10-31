@@ -99,7 +99,12 @@ export class Segment {
 			mdat.write(stream);
 	
 			// Append the generated chunk immediately for progressive playback
-			this.source.initialize(this.init);
+			const hasInitialized = this.source.initialize(this.init);
+			if (!hasInitialized) {
+				for (let i = 0; i < this.init.raw.length; i += 1) {
+					this.source.append(this.init.raw[i], false)
+				}
+			}
 			this.source.append(stream.buffer as ArrayBuffer);
 		}
 	

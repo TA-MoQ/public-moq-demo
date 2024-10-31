@@ -6,10 +6,16 @@ export class Source {
 	mediaSource: MediaSource;
 	queue: Array<SourceInit | SourceData | SourceTrim>;
 	init?: Init;
+	initialized: Promise<void>
+	_initializedResolve?: () => void
 
 	constructor(mediaSource: MediaSource) {
 		this.mediaSource = mediaSource;
 		this.queue = [];
+		
+		this.initialized = new Promise((resolve) => {
+			this._initializedResolve = resolve
+		})
 	}
 
 	// (re)initialize the source using the provided init segment.
@@ -18,13 +24,13 @@ export class Source {
 		for (let i = this.queue.length - 1; i >= 0; i--) {
 			if ((this.queue[i] as SourceInit).init == init) {
 				// Already queued up.
-				return
+				return true
 			}
 		}
 
 		// Check if the init segment has already been applied.
 		if (this.init == init) {
-			return
+			return true
 		}
 
 		// Add the init segment to the queue so we call addSourceBuffer or changeType
@@ -33,24 +39,18 @@ export class Source {
 			init: init,
 		})
 
-		for (let i = 0; i < init.raw.length; i += 1) {
-			this.queue.push({
-				kind: "data",
-				data: init.raw[i],
-			})
-		}
-
 		this.flush()
+		return false
 	}
 
 	// Append the segment data to the buffer.
-	append(data: Uint8Array | ArrayBuffer) {
+	append(data: Uint8Array | ArrayBuffer, shouldFlush: boolean = true) {
 		this.queue.push({
 			kind: "data",
 			data: data,
 		})
 
-		this.flush()
+		if (shouldFlush) this.flush()
 	}
 
 	// Return the buffered range.
@@ -100,6 +100,7 @@ export class Source {
 							// No additional SourceBuffer objects may be added.
 							//
 							this.sourceBuffer = this.mediaSource.addSourceBuffer(this.init.info.mime)
+							this._initializedResolve?.()
 						} catch (err) {
 							// TODO: handle this in a better way
 							console.error(err);

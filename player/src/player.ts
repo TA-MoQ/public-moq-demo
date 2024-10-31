@@ -726,6 +726,17 @@ export class Player {
 			track = this.audio
 		}
 
+		const hasInitialized = track.source.initialize(init);
+		if (!hasInitialized) {
+			for (let i = 0; i < init.raw.length; i += 1) {
+				track.source.append(init.raw[i], false)
+			}
+		}
+		await this.video.source.initialized
+		await this.audio.source.initialized
+		track.source.flush()
+
+
 		// since streams are multiplexed
 		// a stale segment may come later which changes the latest
 		// etp and tc_rate values inadvertently.
