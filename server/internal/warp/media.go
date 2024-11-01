@@ -139,10 +139,11 @@ func findLatestSequence(dir fs.FS) (int, error) {
 type MediaStream struct {
 	Media *Media
 
-	start    time.Time
-	reps     []*mpd.Representation
-	sequence int
-	bitrate  func() uint64 // returns the current estimated bitrate
+	start        time.Time
+	streamOffset time.Duration
+	reps         []*mpd.Representation
+	sequence     int
+	bitrate      func() uint64 // returns the current estimated bitrate
 }
 
 func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitrate func() uint64) (ms *MediaStream, err error) {
@@ -151,6 +152,7 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 	ms.reps = reps
 	ms.start = start
 	ms.bitrate = bitrate
+	ms.streamOffset = -1
 	if m.isStreaming {
 		latestSequence, err := findLatestSequence(m.base)
 		if err != nil {
@@ -329,7 +331,7 @@ func newMediaSegment(s *MediaStream, init *MediaInit, file fs.File, timestamp ti
 }
 
 // Return the next atom, sleeping based on the PTS to simulate a live stream
-func (ms *MediaSegment) Read(ctx context.Context, shouldDelay bool) (chunk []byte, err error) {
+func (ms *MediaSegment) Read(ctx context.Context) (chunk []byte, err error) {
 	// Read the next top-level box
 	var header [8]byte
 
@@ -356,11 +358,21 @@ func (ms *MediaSegment) Read(ctx context.Context, shouldDelay bool) (chunk []byt
 		return nil, fmt.Errorf("failed to parse atom: %w", err)
 	}
 
-	if shouldDelay && sample != nil {
+	if sample != nil {
+		// Only running once, set initial stream offset
+		if ms.Stream.Media.isStreaming && ms.Stream.streamOffset == -1 {
+			ms.Stream.streamOffset = sample.Timestamp
+		}
+
+		offset := 0 * time.Nanosecond
+		if ms.Stream.Media.isStreaming {
+			offset = ms.Stream.streamOffset
+		}
+
 		// Simulate a live stream by sleeping before we write this sample.
 		// Figure out how much time has elapsed since the start
 		elapsed := time.Since(ms.Stream.start)
-		delay := (sample.Timestamp - elapsed)
+		delay := (sample.Timestamp - elapsed - offset)
 
 		if delay > 0 {
 			// Sleep until we're supposed to see these samples

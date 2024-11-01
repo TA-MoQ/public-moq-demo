@@ -402,7 +402,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx, !s.server.isStreaming)
+		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
@@ -512,7 +512,7 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx, !s.server.isStreaming)
+		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
@@ -653,7 +653,7 @@ func (s *Session) writeSegment(ctx context.Context, segment *MediaSegment) (err 
 		// Get the next fragment
 		start := time.Now().UnixMilli()
 
-		buf, err := segment.Read(ctx, !s.server.isStreaming)
+		buf, err := segment.Read(ctx)
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
