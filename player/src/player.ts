@@ -920,7 +920,7 @@ export class Player {
 		// console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
 		let avgLastSegmentJitter;
-		if(msg.init!= '4'){
+		if(msg.init != this.init.size.toString()){
 			avgLastSegmentLatency = this.calculateAverage(chunkLatencies).toFixed(2);
 			avgLastSegmentJitter = this.calculateAverage(chunkJitters).toFixed(2);
 			console.log(`
@@ -956,7 +956,7 @@ export class Player {
 			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
 			this.logFunc('segment start (client): ' + segmentStartTime);
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
-			if(msg.init!= '4'){
+			if(msg.init != this.init.size.toString()){
 				this.throughputs.set('segmentChunksLatency', Number(avgLastSegmentLatency));
 				if(this.isAuto){
 					dbStore.addSegmentLogEntry({
