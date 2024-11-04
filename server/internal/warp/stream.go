@@ -19,9 +19,8 @@ type Stream struct {
 	closed bool
 	err    error
 
-	notify        chan struct{}
-	delayDatagram chan struct{}
-	mutex         sync.Mutex
+	notify chan struct{}
+	mutex  sync.Mutex
 }
 
 func NewStream(inner webtransport.SendStream) (s *Stream) {
@@ -60,8 +59,6 @@ func (s *Stream) Run(ctx context.Context) (err error) {
 
 		if closed {
 			err = s.inner.Close()
-			//fmt.Println("STREAM FINISHED")
-			s.delayDatagram <- struct{}{}
 			return err
 		}
 
