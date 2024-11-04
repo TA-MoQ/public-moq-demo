@@ -158,7 +158,7 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 		if err != nil {
 			fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
 		} else {
-			ms.sequence = max(latestSequence, 1)
+			ms.sequence = max(latestSequence-1, 1)
 		}
 	}
 	return ms, nil

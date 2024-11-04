@@ -1,14 +1,15 @@
 package warp
 
 type Message struct {
-	Init     *MessageInit     `json:"init,omitempty"`
-	Segment  *MessageSegment  `json:"segment,omitempty"`
-	Ping     *MessagePing     `json:"x-ping,omitempty"`
-	Pong     *MessagePong     `json:"pong,omitempty"`
-	Debug    *MessageDebug    `json:"debug,omitempty"`
-	Pref     *MessagePref     `json:"x-pref,omitempty"`
-	Category *MessageCategory `json:"x-category,omitempty"`
-	Auto     *MessageAuto     `json:"x-auto,omitempty"`
+	Init          *MessageInit          `json:"init,omitempty"`
+	Segment       *MessageSegment       `json:"segment,omitempty"`
+	Ping          *MessagePing          `json:"x-ping,omitempty"`
+	Pong          *MessagePong          `json:"pong,omitempty"`
+	Debug         *MessageDebug         `json:"debug,omitempty"`
+	Pref          *MessagePref          `json:"x-pref,omitempty"`
+	Category      *MessageCategory      `json:"x-category,omitempty"`
+	Auto          *MessageAuto          `json:"x-auto,omitempty"`
+	SegmentFinish *MessageSegmentFinish `json:"finish,omitempty"`
 }
 
 type MessageInit struct {
@@ -45,4 +46,8 @@ type MessageCategory struct {
 }
 type MessageAuto struct {
 	Auto bool `json:"auto"`
+}
+
+type MessageSegmentFinish struct {
+	SegmentID uint16 `json:"segment_id"`
 }

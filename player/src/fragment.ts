@@ -122,6 +122,10 @@ export class FragmentedMessageHandler {
 		this.storeFragment(fragment);
 	}
 
+	async closeSegment(segmentId: string) {
+		this.cleanup(segmentId)
+	}
+
 	private initializeStream(segmentID: string, player: Player) {
 		const stream = new ReadableStream<Uint8Array>({
 			start: (controller) => {
@@ -134,10 +138,6 @@ export class FragmentedMessageHandler {
 				// console.log("CANCEL", segmentID)
 			}
 		});
-		setTimeout(() => {
-			// console.log("CLEANUP", segmentID)
-			this.cleanup(segmentID);
-		}, 3100); // 4000 (?)
 		let r = new StreamReader(stream.getReader())
 		player.handleStream(r);
 	}

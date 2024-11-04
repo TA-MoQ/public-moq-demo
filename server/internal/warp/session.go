@@ -352,7 +352,6 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 	// Wrap the stream in an object that buffers writes instead of blocking.
 	stream := NewStream(temp)
-	stream.delayDatagram = datagram.delayNotify
 	s.streams.Add(stream.Run)
 
 	defer func() {
@@ -431,6 +430,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 				count++
 			}
 			if count == datagramStart {
+				datagram.delayNotify <- struct{}{}
 				err = stream.Close()
 				if err != nil {
 					return fmt.Errorf("failed to close segemnt stream: %w", err)
@@ -462,6 +462,31 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
+	}
+
+	finish_message := Message{
+		SegmentFinish: &MessageSegmentFinish{
+			SegmentID: segmentId,
+		},
+	}
+
+	tempTwo, err := s.inner.OpenUniStreamSync(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create stream: %w", err)
+	}
+
+	finalizeStream := NewStream(tempTwo)
+	s.streams.Add(finalizeStream.Run)
+
+	fmt.Println("Concluding datagram")
+	err = finalizeStream.WriteMessage(finish_message)
+	if err != nil {
+		return fmt.Errorf("failed to write finish message: %w", err)
+	}
+
+	err = finalizeStream.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close segemnt stream: %w", err)
 	}
 
 	return nil

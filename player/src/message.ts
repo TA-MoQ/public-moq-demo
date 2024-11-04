@@ -3,6 +3,7 @@ export interface Message {
 	segment?: MessageSegment
 	ping?: MessagePing
 	pong?: MessagePong
+	finish?: MessageSegmentFinish
 }
 
 export interface MessageInit {
@@ -35,4 +36,8 @@ export interface MessagePref {
 
 export interface Debug {
 	max_bitrate: number
+}
+
+export interface MessageSegmentFinish {
+	segment_id: number
 }

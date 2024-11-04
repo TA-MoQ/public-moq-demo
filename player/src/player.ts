@@ -3,7 +3,7 @@ import { StreamReader, StreamWriter } from "./stream"
 import { InitParser } from "./init"
 import { Segment } from "./segment"
 import { Track } from "./track"
-import { Message, MessageInit, MessagePong, MessagePref, MessageSegment } from "./message"
+import { Message, MessageInit, MessagePong, MessagePref, MessageSegment, MessageSegmentFinish } from "./message"
 import { dbStore } from './db';
 import { FragmentedMessageHandler } from "./fragment"
 
@@ -678,8 +678,14 @@ export class Player {
 				return this.handleSegment(r, msg.segment, handleSegmentStartTime)
 			} else if (msg.pong) {
 				return this.handlePong(r, msg.pong)
-			} 
+			} else if (msg.finish) {
+				return this.handleSegmentFinish(r, msg.finish)
+			}
 		}
+	}
+
+	async handleSegmentFinish(stream: StreamReader, msg: MessageSegmentFinish) {
+		this.fragment.closeSegment(msg.segment_id.toString())
 	}
 
 	// TODO: time-sync should be made for this to give correct result
