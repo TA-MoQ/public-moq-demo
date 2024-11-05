@@ -58,6 +58,7 @@ export class Player {
 	lastActiveBWTestResult: number;
 	chunkStats: any[] = [];
 	totalChunkCount = 0; // video track chunk count
+	totalChunkLostCount = 0; // video track chunk lost count
 	currCategory: string;
 	logFunc: Function;
 	testId: string;
@@ -916,11 +917,11 @@ export class Player {
 				this.throughputs.set('chunk', segmentTPut);
 			}
 		}
-		console.log("msg", msg)
+		// console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
 		let avgLastSegmentLatency;
 		let avgLastSegmentJitter;
-		if(msg.init != this.init.size.toString()){
+		if(msg.init != (this.init.size - 1).toString()){ // audio
 			avgLastSegmentLatency = this.calculateAverage(chunkLatencies).toFixed(2);
 			avgLastSegmentJitter = this.calculateAverage(chunkJitters).toFixed(2);
 			console.log(`
@@ -956,7 +957,7 @@ export class Player {
 			this.logFunc('total segment size: ' + formatBits(totalSegmentSize * 8));
 			this.logFunc('segment start (client): ' + segmentStartTime);
 			this.logFunc('availability time (server): ' + new Date(msg.at).toISOString());
-			if(msg.init != this.init.size.toString()){
+			if(msg.init != (this.init.size - 1).toString()){ // audio
 				this.throughputs.set('segmentChunksLatency', Number(avgLastSegmentLatency));
 				if(this.isAuto){
 					dbStore.addSegmentLogEntry({
@@ -995,8 +996,18 @@ export class Player {
 						server_timestamp: msg.at,
 					});
 				}
+				this.totalChunkLostCount += 50 - chunkCounter;
 			}
 		}
+		// console.log(`
+		// 	============= lost chunk statistics ============
+		// 	total chunk count: ${this.totalChunkCount}
+		// 	total chunk lost count: ${this.totalChunkLostCount}
+		// 	total chunk loss rate: ${this.totalChunkLostCount / this.totalChunkCount}
+		// 	current segment chunk count: ${chunkCounter}
+		// 	current segment chunk loss count: ${50 - chunkCounter}
+		// 	current segment chunk loss rate: ${(50 - chunkCounter) / 50}
+		// 	================================================`)
 		//judgement to change from streams to datagrams vice versa if auto is True;
 		// if (this.isAuto){
 		// 	//judgement of average bandwidth, average latency
