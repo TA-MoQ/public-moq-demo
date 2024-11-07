@@ -8,6 +8,7 @@ require (
 	github.com/TA-MoQ/quic-go v0.0.5
 	github.com/TA-MoQ/webtransport-go v0.0.5
 	github.com/abema/go-mp4 v1.2.0
+	github.com/fsnotify/fsnotify v1.8.0
 	github.com/kixelated/invoker v1.0.2
 	github.com/zencoder/go-dash/v3 v3.0.3
 )

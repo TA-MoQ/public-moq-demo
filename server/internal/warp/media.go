@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/abema/go-mp4"
+	"github.com/fsnotify/fsnotify"
 	"github.com/kixelated/invoker"
 	"github.com/zencoder/go-dash/v3/mpd"
 )
@@ -27,11 +28,13 @@ type Media struct {
 	video       []*mpd.Representation
 	audio       []*mpd.Representation
 	isStreaming bool
+	latestSequence int
 }
 
 func NewMedia(playlistPath string, isStreaming bool) (m *Media, err error) {
 	m = new(Media)
 	m.isStreaming = isStreaming
+	m.latestSequence = -1
 
 	// Create a fs.FS out of the folder holding the playlist
 	m.base = os.DirFS(filepath.Dir(playlistPath))
@@ -100,6 +103,11 @@ func NewMedia(playlistPath string, isStreaming bool) (m *Media, err error) {
 		m.inits[*rep.ID] = init
 	}
 
+	// Initialize a file watcher if streaming
+	if isStreaming {
+		go m.watchForNewChunks(filepath.Dir(playlistPath))
+	}
+
 	return m, nil
 }
 
@@ -119,21 +127,95 @@ func (m *Media) Start(bitrate func() uint64) (inits map[string]*MediaInit, audio
 	return m.inits, audio, video, nil
 }
 
-func findLatestSequence(dir fs.FS) (int, error) {
-	matches, _ := fs.Glob(dir, "chunk-stream*.m4s")
-	largest := -1
-	for _, match := range matches {
-		id, err := strconv.Atoi(strings.TrimSuffix(strings.TrimLeft(strings.Split(match, "-")[2], "0"), ".m4s"))
-		if err == nil && id > largest {
-			largest = id
+// watchForNewChunks monitors the directory for new chunk files and updates latestSequence
+func (m *Media) watchForNewChunks(directory string) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		fmt.Println("Error creating watcher:", err)
+		return
+	}
+	defer watcher.Close()
+
+	err = watcher.Add(directory)
+	if err != nil {
+		fmt.Println("Error adding directory to watcher:", err)
+		return
+	}
+
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Create == fsnotify.Create && strings.HasSuffix(event.Name, "m4s") {
+				// fmt.Printf("Create: %s\n", event.Name)
+				m.updateLatestSequence(event.Name)
+			} 
+			// else if event.Op&fsnotify.Create == fsnotify.Create && strings.HasSuffix(event.Name, "m4s.tmp") {
+			// 	fmt.Printf("Create: %s\n", event.Name)
+			// 	m.updateLatestSequence(event.Name)
+			// } else if event.Op&fsnotify.Write == fsnotify.Write && strings.HasSuffix(event.Name, "m4s.tmp") {
+			// 	fmt.Printf("Write: %s\n", event.Name)
+			// 	m.updateLatestSequence(event.Name)
+			// }
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			fmt.Println("Watcher error:", err)
 		}
 	}
+}
 
-	if largest == -1 {
-		return -1, errors.New("couldn't find latest sequence")
+// extractSequenceFromFilename extracts the sequence number from a chunk file name
+func extractSequenceFromFilename(filename string) (int, error) {
+    // Ensure the filename ends with ".m4s"
+    if !strings.HasSuffix(filename, ".m4s") {
+		fmt.Printf("filename: %v\n", filename)
+        return 0, errors.New("unexpected filename format: missing .m4s suffix")
+    }
+
+    // Split the filename and extract the sequence part
+    parts := strings.Split(filename, "-")
+    if len(parts) < 3 {
+        return 0, errors.New("unexpected filename format: missing sequence part")
+    }
+
+    // Remove the ".m4s" suffix and leading zeros
+    sequenceStr := strings.TrimSuffix(parts[2], ".m4s")
+    sequenceStr = strings.TrimLeft(sequenceStr, "0")
+
+    // If the string becomes empty after trimming, default to "0"
+    if sequenceStr == "" {
+        sequenceStr = "0"
+    }
+
+    // Parse the sequence number
+    sequence, err := strconv.Atoi(sequenceStr)
+    if err != nil {
+        return 0, fmt.Errorf("failed to parse sequence: %w", err)
+    }
+
+    return sequence, nil
+}
+
+
+// updateLatestSequence updates the latest sequence number from a new file
+func (m *Media) updateLatestSequence(filename string) {
+	sequence, err := extractSequenceFromFilename(filename)
+	if err != nil {
+		fmt.Println("Error parsing sequence:", err)
+		return
 	}
+	if sequence > m.latestSequence {
+		m.latestSequence = sequence
+	}
+}
 
-	return largest, nil
+// findLatestSequence returns the cached latest sequence number
+func (m *Media) findLatestSequence() int {
+	return m.latestSequence
 }
 
 type MediaStream struct {
@@ -154,9 +236,10 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 	ms.bitrate = bitrate
 	ms.streamOffset = -1
 	if m.isStreaming {
-		latestSequence, err := findLatestSequence(m.base)
-		if err != nil {
+		latestSequence := m.findLatestSequence()
+		if latestSequence == -1 {
 			fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
+			ms.sequence = 1
 		} else {
 			ms.sequence = max(latestSequence-1, 1)
 		}
