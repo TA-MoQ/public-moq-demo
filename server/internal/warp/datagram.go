@@ -28,6 +28,7 @@ type Datagram struct {
 
 	notify      chan struct{}
 	delayNotify chan struct{}
+	finished    chan struct{}
 	isDelayed   bool
 	mutex       sync.Mutex
 	priority    int
@@ -43,6 +44,7 @@ func NewDatagram(inner *webtransport.Session) (d *Datagram) {
 	// cek const MaxPacketBufferSize = 1452 di quic-go
 	d.notify = make(chan struct{})
 	d.delayNotify = make(chan struct{})
+	d.finished = make(chan struct{})
 	d.isDelayed = false
 	return d
 }
@@ -62,7 +64,6 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 		d.mutex.Lock()
 
 		chunks := d.chunks
-		notify := d.notify
 		closed := d.closed
 
 		d.chunks = d.chunks[len(d.chunks):]
@@ -93,7 +94,6 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 
 				header := d.generateHeader(uint16(i), uint16(totalFragments))
 				err := d.inner.SendDatagram(append(header, chunk[start:end]...))
-				//fmt.Println("SENDING DATAGRAM", d.chunkNumber, d.ID)
 				if err != nil {
 					return err
 				}
@@ -102,10 +102,14 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 		}
 
 		if len(chunks) == 0 {
+			go func() {
+				d.finished <- struct{}{}
+			}()
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-notify:
+			case <-d.notify:
+				continue
 			}
 		}
 	}
@@ -124,8 +128,9 @@ func (d *Datagram) Write(buf []byte) (n int, err error) {
 	d.chunks = append(d.chunks, buf)
 
 	// Wake up the writer
-	close(d.notify)
-	d.notify = make(chan struct{})
+	go func() {
+		d.notify <- struct{}{}
+	}()
 
 	return len(buf), nil
 }
@@ -202,8 +207,9 @@ func (d *Datagram) Close() (err error) {
 	d.closed = true
 
 	// Wake up the writer
-	close(d.notify)
-	d.notify = make(chan struct{})
+	go func() {
+		d.notify <- struct{}{}
+	}()
 
 	return nil
 }

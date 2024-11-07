@@ -459,6 +459,10 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 	//logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+
+	// Wait until datagram has finished working
+	<-datagram.finished
+
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
@@ -576,6 +580,10 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	//fmt.Printf("DATAGRAM SEGMENT WRITTEN || ")
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 	//logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+
+	// Wait until datagram has finished working
+	<-datagram.finished
+
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
