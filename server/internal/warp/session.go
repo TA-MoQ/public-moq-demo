@@ -478,7 +478,6 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	finalizeStream := NewStream(tempTwo)
 	s.streams.Add(finalizeStream.Run)
 
-	fmt.Println("Concluding datagram")
 	err = finalizeStream.WriteMessage(finish_message)
 	if err != nil {
 		return fmt.Errorf("failed to write finish message: %w", err)
@@ -580,6 +579,30 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	err = datagram.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close segemnt datagram: %w", err)
+	}
+
+	finish_message := Message{
+		SegmentFinish: &MessageSegmentFinish{
+			SegmentID: datagram.ID,
+		},
+	}
+
+	tempTwo, err := s.inner.OpenUniStreamSync(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create stream: %w", err)
+	}
+
+	finalizeStream := NewStream(tempTwo)
+	s.streams.Add(finalizeStream.Run)
+
+	err = finalizeStream.WriteMessage(finish_message)
+	if err != nil {
+		return fmt.Errorf("failed to write finish message: %w", err)
+	}
+
+	err = finalizeStream.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close segemnt stream: %w", err)
 	}
 
 	return nil
