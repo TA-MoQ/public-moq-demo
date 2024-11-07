@@ -1,2 +1,4 @@
 downloads/
 plots/
+*.ipynb
+*.ps1
