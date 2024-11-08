@@ -13,11 +13,10 @@ type MessageFragment = {
 
 export class FragmentedMessageHandler {
 	//Add Parameter for StatsRef to update stats and throughput map of player.
-	private fragmentBuffers: Map<string, Uint8Array[]>;
-	private chunkBuffers: Map<string, IQueue<Uint8Array>>;
+	private fragmentBuffers: Map<string, (Uint8Array | null)[]>;
+	private chunkBuffers: Map<string, [chunkNumber: number, data: Uint8Array][]>;
 	private chunkCount: Map<string, number>;
 	private chunkTotal: Map<string, number>;
-	private isDelayed: Map<string, boolean>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 
 	constructor() {
@@ -25,7 +24,6 @@ export class FragmentedMessageHandler {
 		this.chunkBuffers = new Map();
 		this.chunkCount = new Map();
 		this.chunkTotal = new Map();
-		this.isDelayed = new Map();
 		this.segmentStreams = new Map();
 	}
 
@@ -61,13 +59,6 @@ export class FragmentedMessageHandler {
 		// }, 2100);
 
 		while (controller !== undefined) {
-			if (count === 4) { // 1 or 4
-				this.isDelayed.set(segmentID, false)
-				const chunkBuffers = this.chunkBuffers.get(segmentID)
-				while (chunkBuffers !== undefined && controller !== undefined && chunkBuffers.size() !== 0) {
-					this.enqueueChunk(segmentID, chunkBuffers.dequeue(), controller)
-				}
-			}
 			if (await r.done()) {
 				break;
 			}
@@ -123,7 +114,7 @@ export class FragmentedMessageHandler {
 	}
 
 	async closeSegment(segmentId: string) {
-		this.cleanup(segmentId)
+		setTimeout(() => this.cleanup(segmentId), 1000)
 	}
 
 	private initializeStream(segmentID: string, player: Player) {
@@ -131,7 +122,6 @@ export class FragmentedMessageHandler {
 			start: (controller) => {
 				this.chunkCount.set(segmentID, 0);
 				this.segmentStreams.set(segmentID, controller);
-				this.isDelayed.set(segmentID, true);
 			},
 			cancel: () => {
 				this.cleanup(segmentID);
@@ -143,51 +133,63 @@ export class FragmentedMessageHandler {
 	}
 
 	private storeFragment(fragment: MessageFragment) {
+		if (!this.chunkBuffers.has(fragment.segmentID)) {
+			this.chunkBuffers.set(fragment.segmentID, [])
+		}
+
 		if (!this.fragmentBuffers.has(fragment.chunkID)) {
 			this.fragmentBuffers.set(fragment.chunkID, new Array(fragment.fragmentTotal).fill(null))
 		}
+
 		const fragmentBuffer = this.fragmentBuffers.get(fragment.chunkID);
-		const isDelayed = this.isDelayed.get(fragment.segmentID);
-		const controller = this.segmentStreams.get(fragment.segmentID);
 		if (fragmentBuffer) {
 			fragmentBuffer[fragment.fragmentNumber] = fragment.data;
 			if (fragmentBuffer.every(element => element !== null)) {
-				const totalLength = fragmentBuffer.reduce((acc, val) => acc + val.length, 0);
-				const completeData = new Uint8Array(totalLength);
-
-				// Copy each Uint8Array into completeData
-				let offset = 0;
-				fragmentBuffer.forEach((chunk) => {
-					completeData.set(chunk, offset);
-					offset += chunk.length;
-				});
-
-				if (!this.chunkBuffers.has(fragment.segmentID)) {
-					this.chunkBuffers.set(fragment.segmentID, new Queue())
-				}
-				const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
-				if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
-					if (fragment.chunkNumber === 0) {
-						// controller.enqueue(completeData)
-						this.enqueueChunk(fragment.segmentID, completeData, controller)
-						this.isDelayed.set(fragment.segmentID, false)
-					} else {
-						chunkBuffers.enqueue(completeData)
-					}
-
-					this.fragmentBuffers.delete(fragment.chunkID);
-				}
+				this.writeFragment(fragment.chunkID, fragment.segmentID, fragment.chunkNumber)
+				this.flushChunks(fragment.segmentID)
 			}
 		}
-		const chunkBuffers = this.chunkBuffers.get(fragment.segmentID)
-		if (isDelayed !== undefined && controller !== undefined && chunkBuffers !== undefined) {
-			if (!isDelayed) {
-				while (chunkBuffers.size() !== 0) {
-					// controller.enqueue(chunkBuffers.dequeue())
-					this.enqueueChunk(fragment.segmentID, chunkBuffers.dequeue(), controller)
-				}
-			}
+	}
+
+	private writeFragment(chunkId: string, segmentId: string, chunkNumber: number) {
+		const fragmentBuffer = this.fragmentBuffers.get(chunkId)
+		if (!fragmentBuffer) return
+
+		const cleanedBuf = fragmentBuffer.filter(x => x != null)
+		const totalLength = cleanedBuf.reduce((acc, val) => acc + val.length, 0);
+		const completeData = new Uint8Array(totalLength);
+
+		// Copy each Uint8Array into completeData
+		let offset = 0;
+		cleanedBuf.forEach((chunk) => {
+			completeData.set(chunk, offset);
+			offset += chunk.length;
+		});
+
+		if (!this.chunkBuffers.has(segmentId)) {
+			this.chunkBuffers.set(segmentId, [])
 		}
+		const chunkBuffers = this.chunkBuffers.get(segmentId)
+		if (!chunkBuffers) return;
+
+		chunkBuffers.push([chunkNumber, completeData]);
+		this.fragmentBuffers.delete(chunkId);
+	}
+
+	private flushChunks(segmentId: string) {
+		const unfinishedFragments = Array.from(this.fragmentBuffers.keys()).filter((x) => x.startsWith(segmentId))
+		unfinishedFragments.forEach((k) => {
+			const chunkNumber = Number(k.split("-")[1])
+			this.writeFragment(k, segmentId, chunkNumber)
+		})
+
+		const bufs = this.chunkBuffers.get(segmentId)
+		const controller = this.segmentStreams.get(segmentId);
+		if (!bufs || !controller) return
+
+		console.warn(`Flushing ${bufs.length} chunks`)
+		bufs.sort((a, b) => a[0] - b[0]).forEach(([_, data]) => this.enqueueChunk(segmentId, data, controller))
+		this.chunkBuffers.delete(segmentId)
 	}
 
 	private enqueueChunk(segmentID: string, chunk: Uint8Array | undefined, controller: ReadableStreamDefaultController<Uint8Array>) {
@@ -230,9 +232,9 @@ export class FragmentedMessageHandler {
 	}
 
 	private cleanup(segmentID: string) {
+		this.flushChunks(segmentID);
 		this.segmentStreams.get(segmentID)?.close();
 		this.segmentStreams.delete(segmentID);
-		this.isDelayed.delete(segmentID);
 		this.chunkBuffers.delete(segmentID);
 		// console.log("DELETE ", segmentID)
 	}
