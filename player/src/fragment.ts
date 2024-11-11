@@ -155,6 +155,15 @@ export class FragmentedMessageHandler {
 		const fragmentBuffer = this.fragmentBuffers.get(chunkId)
 		if (!fragmentBuffer) return
 
+		for (let i = 0; i < fragmentBuffer.length; i++) {
+			if (fragmentBuffer[i] === null) {
+				console.error(`Missing fragment ${i} in chunk ${chunkId}`)
+				return
+			} else {
+				console.log(`Decoded fragment ${i}: ${new TextDecoder().decode(fragmentBuffer[i]!)}`)
+			}
+		}
+		
 		const cleanedBuf = fragmentBuffer.filter(x => x != null)
 		const totalLength = cleanedBuf.reduce((acc, val) => acc + val.length, 0);
 		const completeData = new Uint8Array(totalLength);
@@ -178,10 +187,17 @@ export class FragmentedMessageHandler {
 
 	private flushChunks(segmentId: string) {
 		const unfinishedFragments = Array.from(this.fragmentBuffers.keys()).filter((x) => x.startsWith(segmentId))
-		unfinishedFragments.forEach((k) => {
-			const chunkNumber = Number(k.split("-")[1])
-			this.writeFragment(k, segmentId, chunkNumber)
+		let unfinishedChunkCount = 0
+		unfinishedFragments.forEach((chunkId) => {
+			const chunkNumber = Number(chunkId.split("-")[1])
+			unfinishedChunkCount++
+			console.log("Found unfinished chunk with ID:", chunkId)
+			if (this.repairChunkSize(chunkId)) {
+				unfinishedChunkCount--
+				this.writeFragment(chunkId, segmentId, chunkNumber)
+			}
 		})
+		console.log(`Total unfinised chunks: ${unfinishedChunkCount}`)
 
 		const bufs = this.chunkBuffers.get(segmentId)
 		const controller = this.segmentStreams.get(segmentId);
@@ -191,6 +207,95 @@ export class FragmentedMessageHandler {
 		bufs.sort((a, b) => a[0] - b[0]).forEach(([_, data]) => this.enqueueChunk(segmentId, data, controller))
 		this.chunkBuffers.delete(segmentId)
 	}
+
+	private reconstructChunk(chunkId: string): boolean {
+		const fragmentBuffer = this.fragmentBuffers.get(chunkId);
+		if (!fragmentBuffer) return false;
+	
+		// Check if index 0 (start of the fragment) is null
+		if (!fragmentBuffer[0]) {
+			console.error(`Missing required 'moof' atom or initial data in fragment 0 for chunkID: ${chunkId}`);
+			return false; // all the metadatas are in the first fragment, so return false if it's missing
+		}
+	
+		// Ensure the 4 bytes before the "mdat" atom are valid
+		const mdatIndex = new TextDecoder().decode(fragmentBuffer[0]).indexOf('mdat');
+		let mdatSize = -1;
+		if (mdatIndex > 4) {
+			const sizeStartIndex = mdatIndex - 4;
+			mdatSize = new DataView(fragmentBuffer[0].buffer).getUint32(sizeStartIndex);
+			if (mdatSize === -1) {
+				console.error(`Invalid or missing 'mdat' atom size in fragment 0 for chunkID: ${chunkId}`);
+				return false; // Return false if the size is not properly set
+			}
+			mdatSize -= fragmentBuffer[0].length - sizeStartIndex
+		} else {
+			console.error(`'mdat' atom not found or in an unexpected location in fragment 0 for chunkID: ${chunkId}`);
+			return false; // Ensure 'mdat' is present and correctly positioned
+		}
+
+		console.log(`Found 'mdat' atom with size ${mdatSize} in fragment 0 for chunkID: ${chunkId}`);
+	
+		// Reconstruct missing 'mdat' data if possible
+		for (let i = 1; i < fragmentBuffer.length; i++) {
+			if (!fragmentBuffer[i]) {
+				console.log(`Reconstructing missing 'mdat' data at index ${i} in chunkID: ${chunkId}`);
+				
+				// Fill missing 'mdat' data with dummy bytes (e.g., null bytes)
+				if (mdatSize <= 1250) {
+					fragmentBuffer[i] = new Uint8Array(mdatSize);
+				} else {
+					fragmentBuffer[i] = new Uint8Array(1250);
+				}
+				mdatSize -= fragmentBuffer[i]!.length;
+			} else {
+				mdatSize -= fragmentBuffer[i]!.length;
+			}
+			console.log(`fragmentBuffer[${i}].length: ${fragmentBuffer[i]!.length}`)
+		}
+		
+		// Replace the original buffer with the reconstructed one
+		this.fragmentBuffers.set(chunkId, fragmentBuffer);
+		console.log(`Remaining 'mdat' data size: ${mdatSize}`);
+		if (mdatSize != 0) {
+			console.error(`Something wrong big boi! Check your mdat size! Remaining mdat size: ${mdatSize}`);
+			return false;
+		}
+		return true;
+	}
+	
+	private repairChunkSize(chunkId: string): boolean {
+		const fragmentBuffer = this.fragmentBuffers.get(chunkId);
+		if (!fragmentBuffer) return false;
+	
+		// Check if index 0 (start of the fragment) is null
+		if (!fragmentBuffer[0]) {
+			console.error(`Missing required 'moof' atom or initial data in fragment 0 for chunkID: ${chunkId}`);
+			return false; // all the metadatas are in the first fragment, so return false if it's missing
+		}
+	
+		// Ensure the 4 bytes before the "mdat" atom are valid and update the size
+		const mdatIndex = new TextDecoder().decode(fragmentBuffer[0]).indexOf('mdat');
+		if (mdatIndex > 4) {
+			const sizeStartIndex = mdatIndex - 4;
+			let mdatSize = fragmentBuffer.reduce((acc, buf) => acc + (buf ? buf.length : 0), 0) - sizeStartIndex;
+	
+			// Update the mdat size in the original buffer
+			const sizeBytes = new Uint8Array([mdatSize >>> 24, (mdatSize >>> 16) & 0xFF, (mdatSize >>> 8) & 0xFF, mdatSize & 0xFF]);
+			fragmentBuffer[0].set(sizeBytes, sizeStartIndex);
+	
+			console.log(`Repaired 'mdat' atom size to ${mdatSize} in fragment 0 for chunkID: ${chunkId}`);
+		} else {
+			console.error(`'mdat' atom not found or in an unexpected location in fragment 0 for chunkID: ${chunkId}`);
+			return false; // Ensure 'mdat' is present and correctly positioned
+		}
+	
+		// Replace the original buffer with the updated one
+		this.fragmentBuffers.set(chunkId, fragmentBuffer);
+		console.log(`Chunk repair complete for chunkID: ${chunkId}`);
+		return true;
+	}
+	
 
 	private enqueueChunk(segmentID: string, chunk: Uint8Array | undefined, controller: ReadableStreamDefaultController<Uint8Array>) {
 		if (chunk === undefined) {
