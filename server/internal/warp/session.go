@@ -207,24 +207,11 @@ func (s *Session) runAudio(ctx context.Context) (err error) {
 		if segment == nil {
 			return nil
 		}
-		if s.category == 0 {
-			err = s.writeSegment(ctx, segment)
-			if err != nil {
-				return fmt.Errorf("failed to write segment stream: %w", err)
-			}
-		} else if s.category == 1 {
-			err = s.writeSegmentDatagram(ctx, segment)
-			if err != nil {
-				fmt.Println(err)
-				return fmt.Errorf("failed to write segment datagram: %w", err)
-			}
-		} else if s.category == 2 {
-			err = s.writeSegmentHybrid(ctx, segment)
-			if err != nil {
-				return fmt.Errorf("failed to write segment hybrid: %w", err)
-			}
-		}
 
+		err = s.writeSegment(ctx, segment)
+		if err != nil {
+			return fmt.Errorf("failed to write segment stream: %w", err)
+		}
 	}
 }
 
