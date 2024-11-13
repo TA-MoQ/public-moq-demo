@@ -396,6 +396,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	}
 
 	count := 1
+	isDatagramTurn := true
 	var chunk []byte
 	for {
 		// Get the next fragment
@@ -431,10 +432,6 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 			}
 			if count == datagramStart {
 				datagram.delayNotify <- struct{}{}
-				err = stream.Close()
-				if err != nil {
-					return fmt.Errorf("failed to close segemnt stream: %w", err)
-				}
 			}
 			continue
 		}
@@ -445,7 +442,15 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
 			chunk = append(chunk, buf...)
-			_, err = datagram.Write(chunk)
+
+			if isDatagramTurn {
+				_, err = datagram.Write(chunk)
+				isDatagramTurn = false
+			} else {
+				_, err = stream.Write(chunk)
+				isDatagramTurn = true
+			}
+
 			chunk = nil
 			count++
 			if err != nil {
@@ -459,6 +464,11 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 	//fmt.Printf("CATEGORY: %d\n", s.category)
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 	//logtoCSV("HYBRID", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
+
+	err = stream.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close segemnt stream: %w", err)
+	}
 
 	// Wait until datagram has finished working
 	<-datagram.finished
