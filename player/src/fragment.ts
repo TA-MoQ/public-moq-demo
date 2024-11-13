@@ -114,7 +114,7 @@ export class FragmentedMessageHandler {
 	}
 
 	async closeSegment(segmentId: string) {
-		setTimeout(() => this.cleanup(segmentId), 1000)
+		this.cleanup(segmentId)
 	}
 
 	private initializeStream(segmentID: string, player: Player) {
