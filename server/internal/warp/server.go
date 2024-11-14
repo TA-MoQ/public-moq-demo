@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os/exec"
 	"strconv"
@@ -35,7 +36,9 @@ type Server struct {
 	// Whether the DASH file is for streaming or not
 	isStreaming bool
 
-	sessions invoker.Tasks
+	sessions    invoker.Tasks
+	connIdAddr  map[quic.ConnectionID]string
+	sessionCwnd map[string]int64
 }
 
 type ServerConfig struct {
@@ -48,6 +51,8 @@ type ServerConfig struct {
 func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	s = new(Server)
 
+	s.connIdAddr = map[quic.ConnectionID]string{}
+	s.sessionCwnd = map[string]int64{}
 	s.isStreaming = config.IsStreaming
 	s.continueStreaming = true
 	s.tcRate = -1
@@ -59,13 +64,13 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	// if config.LogDir != "" {
 	// 	quicConfig.Tracer = qlog.NewTracer(func(p logging.Perspective, connectionID []byte) io.WriteCloser {
 	// 		path := fmt.Sprintf("%s-%s.qlog", p, hex.EncodeToString(connectionID))
-	
+
 	// 		f, err := os.Create(filepath.Join(config.LogDir, path))
 	// 		if err != nil {
 	// 			// lame
 	// 			panic(err)
 	// 		}
-	
+
 	// 		return f
 	// 	})
 	// }
@@ -73,19 +78,28 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	// packetsLost := 0
 	quicConfig.Tracer = func(ctx context.Context, p logging.Perspective, connID quic.ConnectionID) *logging.ConnectionTracer {
 		return &logging.ConnectionTracer{
+			StartedConnection: func(local, remote net.Addr, src, dest quic.ConnectionID) {
+				s.connIdAddr[connID] = remote.String()
+				s.sessionCwnd[remote.String()] = 0
+			},
+			Close: func() {
+				delete(s.sessionCwnd, s.connIdAddr[connID])
+				delete(s.connIdAddr, connID)
+			},
 			// LostPacket: func(encLevel logging.EncryptionLevel, pn logging.PacketNumber, reason logging.PacketLossReason) {
 			// 	packetsLost++
 			// 	packetLossRate := (float64(packetsLost) / float64(packetsSent)) * 100
 			// 	fmt.Printf("Packet #%d lost with reason %d | Loss Rate: %.2f%%\n", pn, reason, packetLossRate)
 			// },
-			// UpdatedMetrics: func(rttStats *logging.RTTStats, cwnd, bytesInFlight logging.ByteCount, packetsInFlight int) {
-			// 	// fmt.Println("====================================")
-			// 	// fmt.Println("rttStats: ", rttStats)
-			// 	// fmt.Println("cwnd: ", cwnd)
-			// 	// fmt.Println("bytesInFlight: ", bytesInFlight)
-			// 	// fmt.Println("packetsInFlight: ", packetsInFlight)
-			// 	// fmt.Println("====================================")
-			// },
+			UpdatedMetrics: func(rttStats *logging.RTTStats, cwnd, bytesInFlight logging.ByteCount, packetsInFlight int) {
+				s.sessionCwnd[s.connIdAddr[connID]] = int64(cwnd) / 1250
+				// fmt.Println("====================================")
+				// fmt.Println("rttStats: ", rttStats)
+				// fmt.Println("cwnd: ", cwnd)
+				// fmt.Println("bytesInFlight: ", bytesInFlight)
+				// fmt.Println("packetsInFlight: ", packetsInFlight)
+				// fmt.Println("====================================")
+			},
 			// BufferedPacket: func(p logging.PacketType, b logging.ByteCount) {
 			// 	fmt.Println(p)
 			// },
@@ -273,6 +287,10 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 	//})
 
 	return s, nil
+}
+
+func (s *Server) GetPacketThreshold(addr string) int64 {
+	return s.sessionCwnd[addr]
 }
 
 func (s *Server) runTcProfile(ctx context.Context) (err error) {

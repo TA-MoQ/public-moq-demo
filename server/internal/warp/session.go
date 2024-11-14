@@ -382,8 +382,8 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		return fmt.Errorf("failed to write segment data: %w", err)
 	}
 
+	hybrid := NewHybrid(stream, datagram, s.server)
 	count := 1
-	isDatagramTurn := true
 	var chunk []byte
 	for {
 		// Get the next fragment
@@ -429,14 +429,7 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 
 		if string(buf[4:8]) == "mdat" || string(buf[4:8]) == "styp" {
 			chunk = append(chunk, buf...)
-
-			if isDatagramTurn {
-				_, err = datagram.Write(chunk)
-				isDatagramTurn = false
-			} else {
-				_, err = stream.Write(chunk)
-				isDatagramTurn = true
-			}
+			hybrid.Write(chunk)
 
 			chunk = nil
 			count++
