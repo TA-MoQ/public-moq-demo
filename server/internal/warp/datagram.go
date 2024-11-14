@@ -32,6 +32,8 @@ type Datagram struct {
 	isDelayed   bool
 	mutex       sync.Mutex
 	priority    int
+
+	fragmentToSend int
 }
 
 func NewDatagram(inner *webtransport.Session) (d *Datagram) {
@@ -39,6 +41,7 @@ func NewDatagram(inner *webtransport.Session) (d *Datagram) {
 	d.ID = uint16(atomic.AddInt32(&idCounter, 1) % 65536)
 	d.chunkNumber = 0
 	d.inner = inner
+	d.fragmentToSend = 0
 	d.maxSize = 1250 // // gatau kenapa skip 2 detik diawal kalau segini
 	// diatas 1415 (1392 + header(23)), diterima client sudah dipotong2
 	// cek const MaxPacketBufferSize = 1452 di quic-go
@@ -97,8 +100,13 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return err
 				}
+
+				d.mutex.Lock()
+				d.fragmentToSend -= 1
+				d.mutex.Unlock()
 			}
 			d.chunkNumber++
+
 		}
 
 		if len(chunks) == 0 {
@@ -126,6 +134,10 @@ func (d *Datagram) Write(buf []byte) (n int, err error) {
 	// Make a copy of the buffer so it's long lived
 	buf = append([]byte{}, buf...)
 	d.chunks = append(d.chunks, buf)
+	d.fragmentToSend += (len(buf) / d.maxSize)
+	if len(buf)%d.maxSize != 0 {
+		d.fragmentToSend++
+	}
 
 	// Wake up the writer
 	go func() {
