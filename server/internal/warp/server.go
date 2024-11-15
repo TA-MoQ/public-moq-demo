@@ -95,7 +95,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 			// 	fmt.Printf("Packet #%d lost with reason %d | Loss Rate: %.2f%%\n", pn, reason, packetLossRate)
 			// },
 			UpdatedMetrics: func(rttStats *logging.RTTStats, cwnd, bytesInFlight logging.ByteCount, packetsInFlight int) {
-				s.SetPacketThreshold(s.connIdAddr[connID], int64(cwnd)/1250)
+				s.SetPacketThreshold(s.connIdAddr[connID], (int64(cwnd) + 1249) / 1250) // ceil(cwnd / 1250)
 				// fmt.Println("====================================")
 				// fmt.Println("rttStats: ", rttStats)
 				// fmt.Println("cwnd: ", cwnd)

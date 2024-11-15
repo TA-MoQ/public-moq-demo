@@ -21,7 +21,7 @@ func NewHybrid(stream *Stream, datagram *Datagram, server *Server) Hybrid {
 }
 
 func (h *Hybrid) Write(buf []byte) (n int, err error) {
-	expectedFragments := (len(buf) / 1250) + 1
+	expectedFragments := (len(buf) + 1249) / 1250 // ceil(len(buf) / 1250)
 	threshold := int(h.server.GetPacketThreshold(h.addr))
 	fmt.Printf("** Fragments: %d, Threshold: %d, In queue: %d\n", expectedFragments, threshold, h.datagram.fragmentToSend)
 	if (expectedFragments + h.datagram.fragmentToSend) > threshold {
