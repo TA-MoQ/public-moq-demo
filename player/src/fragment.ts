@@ -160,7 +160,7 @@ export class FragmentedMessageHandler {
 				console.error(`Missing fragment ${i} in chunk ${chunkId}`)
 				return
 			} else {
-				console.log(`Decoded fragment ${i}: ${new TextDecoder().decode(fragmentBuffer[i]!)}`)
+				// console.log(`Decoded fragment ${i}: ${new TextDecoder().decode(fragmentBuffer[i]!)}`)
 			}
 		}
 		
