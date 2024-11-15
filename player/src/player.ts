@@ -73,6 +73,7 @@ export class Player {
 
 	// Track the latest end time to prevent recounting gaps
 	latestBufferedEnd: number;
+	bufferTimeRef: number;
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -93,6 +94,7 @@ export class Player {
 		this.totalBufferingDuration = 0;
 		this.totalBufferingCount = 0;
 		this.latestBufferedEnd = 0;
+		this.bufferTimeRef = -1;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -162,6 +164,33 @@ export class Player {
 
 		this.interval = setInterval(this.tick.bind(this), 100)
 		this.vidRef.addEventListener("waiting", this.tick.bind(this))
+
+		this.vidRef.addEventListener('error', () => {
+			const mediaError = this.vidRef.error;
+			console.error('in error | mediaError: %o', mediaError);
+			if (mediaError) {
+				let errorMessage;
+				switch (mediaError.code) {
+					case mediaError.MEDIA_ERR_ABORTED:
+						errorMessage = "The video playback was aborted.";
+						break;
+					case mediaError.MEDIA_ERR_NETWORK:
+						errorMessage = "A network error caused the video download to fail.";
+						break;
+					case mediaError.MEDIA_ERR_DECODE:
+						errorMessage = "The video playback was aborted due to a decoding error.";
+						break;
+					case mediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+						errorMessage = "The video format is not supported.";
+						break;
+					default:
+						errorMessage = "An unknown error occurred.";
+						break;
+				}
+				console.error(`Video Error: ${errorMessage} (Code: ${mediaError.code})`);
+			}
+		});
+	
 
 		this.resolutionsRef.addEventListener('change', this.resolutionOnChange)
 		this.throttleDDLRef.addEventListener('change', this.throttleOnChange);
@@ -1073,6 +1102,12 @@ export class Player {
 		const elapsedTime = (performance.now() - this.timeRef!) / 1000; // in seconds
 		
 		if (videoBufferRanges.length > 0 && audioBufferRanges.length > 0 && elapsedTime !== undefined && elapsedTime > 0) {
+			if (this.bufferTimeRef === -1) {
+				this.bufferTimeRef = Math.min(videoBufferRanges[0].start, audioBufferRanges[0].start);
+			}
+			const latestVideoBufferedTime = (videoBufferRanges[videoBufferRanges.length - 1].end - this.bufferTimeRef!);
+			const latestAudioBufferedTime = (audioBufferRanges[audioBufferRanges.length - 1].end - this.bufferTimeRef!);
+			const latestBufferedTime = Math.max(latestVideoBufferedTime, latestAudioBufferedTime);
 			const videoDurationInBuffered = videoBufferRanges[videoBufferRanges.length - 1].end - videoBufferRanges[0].start;
 			const videoRebufferingRatioInBuffered = videoBufferingDurationInBuffered / videoDurationInBuffered;
 			const videoBufferingCountInBuffered = videoBufferRanges.length - 1;
@@ -1099,8 +1134,8 @@ export class Player {
 			// Video Buffering Count: ${this.video.bufferingCount}
 			// Audio Total Buffering Duration: ${this.audio.totalBufferingDuration}
 			// Video Total Buffering Duration: ${this.video.totalBufferingDuration}
-			// Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / elapsedTime}
-			// Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / elapsedTime}
+			// Audio Total Rebuffering Ratio: ${this.audio.totalBufferingDuration / latestAudioBufferedTime}
+			// Video Total Rebuffering Ratio: ${this.video.totalBufferingDuration / latestVideoBufferedTime}
 			// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 		
 			let combinedGaps = [...videoBufferGaps, ...audioBufferGaps];
@@ -1151,7 +1186,7 @@ export class Player {
 			Elapsed Time: ${elapsedTime}
 			Total Buffering Count: ${this.totalBufferingCount}
 			Total Buffering Duration: ${this.totalBufferingDuration}
-			Total Rebuffering Ratio: ${this.totalBufferingDuration / elapsedTime}
+			Total Rebuffering Ratio: ${this.totalBufferingDuration / latestBufferedTime}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 			// console.log("adding to buffering logs...")
 			dbStore.addBufferingLogEntry({
@@ -1173,12 +1208,12 @@ export class Player {
 				videoBufferingCount: this.video.bufferingCount,
 				audioTotalBufferingDuration: this.audio.totalBufferingDuration,
 				videoTotalBufferingDuration: this.video.totalBufferingDuration,
-				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / elapsedTime,
-				videoTotalRebufferingRatio: this.video.totalBufferingDuration / elapsedTime,
+				audioTotalRebufferingRatio: this.audio.totalBufferingDuration / latestAudioBufferedTime,
+				videoTotalRebufferingRatio: this.video.totalBufferingDuration / latestVideoBufferedTime,
 				// overall stats from the start (considering both video and audio)
 				overallBufferingCount: this.totalBufferingCount,
 				overallBufferingDuration: this.totalBufferingDuration,
-				overallRebufferingRatio: this.totalBufferingDuration / elapsedTime,
+				overallRebufferingRatio: this.totalBufferingDuration / latestBufferedTime,
 			});
 		}
 		
