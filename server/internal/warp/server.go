@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TA-MoQ/quic-go"
@@ -39,6 +40,8 @@ type Server struct {
 	sessions    invoker.Tasks
 	connIdAddr  map[quic.ConnectionID]string
 	sessionCwnd map[string]int64
+
+	rwMutex       sync.RWMutex
 }
 
 type ServerConfig struct {
@@ -80,7 +83,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 		return &logging.ConnectionTracer{
 			StartedConnection: func(local, remote net.Addr, src, dest quic.ConnectionID) {
 				s.connIdAddr[connID] = remote.String()
-				s.sessionCwnd[remote.String()] = 0
+				s.SetPacketThreshold(remote.String(), 0)
 			},
 			Close: func() {
 				delete(s.sessionCwnd, s.connIdAddr[connID])
@@ -92,7 +95,7 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 			// 	fmt.Printf("Packet #%d lost with reason %d | Loss Rate: %.2f%%\n", pn, reason, packetLossRate)
 			// },
 			UpdatedMetrics: func(rttStats *logging.RTTStats, cwnd, bytesInFlight logging.ByteCount, packetsInFlight int) {
-				s.sessionCwnd[s.connIdAddr[connID]] = int64(cwnd) / 1250
+				s.SetPacketThreshold(s.connIdAddr[connID], int64(cwnd)/1250)
 				// fmt.Println("====================================")
 				// fmt.Println("rttStats: ", rttStats)
 				// fmt.Println("cwnd: ", cwnd)
@@ -290,7 +293,15 @@ func NewServer(config ServerConfig, media *Media) (s *Server, err error) {
 }
 
 func (s *Server) GetPacketThreshold(addr string) int64 {
+	s.rwMutex.RLock()
+	defer s.rwMutex.RUnlock()
 	return s.sessionCwnd[addr]
+}
+
+func (s *Server) SetPacketThreshold(addr string, threshold int64) {
+	s.rwMutex.Lock()
+	defer s.rwMutex.Unlock()
+	s.sessionCwnd[addr] = threshold
 }
 
 func (s *Server) runTcProfile(ctx context.Context) (err error) {
