@@ -19,10 +19,8 @@ import (
 
 // A single WebTransport session
 type Session struct {
-	conn         quic.Connection
-	inner        *webtransport.Session
-	sendDatagram *SendDatagram
-	// TODO: Add support for datagram
+	conn  quic.Connection
+	inner *webtransport.Session
 
 	media *Media
 	inits map[string]*MediaInit
@@ -48,7 +46,6 @@ func NewSession(connection quic.Connection, session *webtransport.Session, media
 	s.server = server
 	s.conn = connection
 	s.inner = session
-	s.sendDatagram = newSendDatagram(session)
 	s.media = media
 	s.continueStreaming = true
 	s.server.continueStreaming = true
