@@ -74,6 +74,11 @@ export class Player {
 	// Track the latest end time to prevent recounting gaps
 	latestBufferedEnd: number;
 	bufferTimeRef: number;
+	bufferingStartTime: number | null;
+	totalBufferingDurationFromEvent: number;
+	totalBufferingCountFromEvent: number;
+
+	waitingTimeout: NodeJS.Timeout | null = null;
 	constructor(props: any) {
 		this.vidRef = props.vid
 		this.statsRef = props.stats
@@ -95,6 +100,9 @@ export class Player {
 		this.totalBufferingCount = 0;
 		this.latestBufferedEnd = 0;
 		this.bufferTimeRef = -1;
+		this.bufferingStartTime = null;
+		this.totalBufferingDurationFromEvent = 0;
+		this.totalBufferingCountFromEvent = 0;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -188,6 +196,62 @@ export class Player {
 						break;
 				}
 				console.error(`Video Error: ${errorMessage} (Code: ${mediaError.code})`);
+			}
+		});
+
+		this.vidRef.addEventListener("waiting", () => {
+			if (this.bufferingStartTime === null) {
+				this.bufferingStartTime = performance.now();
+				this.totalBufferingCountFromEvent++;
+				console.log("[BUFFERING] Player is waiting...");
+
+				this.waitingTimeout = setTimeout(() => {
+					if (this.bufferingStartTime !== null) {
+						console.log("[BUFFERING] Player is still waiting after 5 seconds. Calling goLive...");
+						this.goLive();
+					}
+				}, 5000);
+			}
+		});
+
+		this.vidRef.addEventListener("stalled", () => {
+			if (this.bufferingStartTime === null) {
+				this.bufferingStartTime = performance.now();
+				this.totalBufferingCountFromEvent++;
+				console.log("[BUFFERING] Player is stalled...");
+
+				this.waitingTimeout = setTimeout(() => {
+					if (this.bufferingStartTime !== null) {
+						console.log("[BUFFERING] Player is still waiting after 5 seconds. Calling goLive...");
+						this.goLive();
+					}
+				}, 5000);
+			}
+		});
+
+		this.vidRef.addEventListener("playing", () => {
+			if (this.bufferingStartTime !== null) {
+				const bufferingDuration = performance.now() - this.bufferingStartTime;
+				this.totalBufferingDurationFromEvent += bufferingDuration / 1000;
+				this.bufferingStartTime = null;
+				console.log(`[BUFFERING] Buffering ended (playing). Duration: ${bufferingDuration.toFixed(2)} ms`);
+
+				if (this.waitingTimeout) {
+					clearTimeout(this.waitingTimeout);
+				}
+			}
+		});
+
+		this.vidRef.addEventListener("canplay", () => {
+			if (this.bufferingStartTime !== null) {
+				const bufferingDuration = performance.now() - this.bufferingStartTime;
+				this.totalBufferingDurationFromEvent += bufferingDuration / 1000;
+				this.bufferingStartTime = null;
+				console.log(`[BUFFERING] Buffering ended (can play). Duration: ${bufferingDuration.toFixed(2)} ms`);
+
+				if (this.waitingTimeout) {
+					clearTimeout(this.waitingTimeout);
+				}
 			}
 		});
 	
@@ -1187,6 +1251,8 @@ export class Player {
 			Total Buffering Count: ${this.totalBufferingCount}
 			Total Buffering Duration: ${this.totalBufferingDuration}
 			Total Rebuffering Ratio: ${this.totalBufferingDuration / latestBufferedTime}
+			Buffering Duration From Event Listener: ${this.totalBufferingDurationFromEvent}
+			Rebuffering Ratio From Event Listener: ${this.totalBufferingDurationFromEvent / elapsedTime}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 			// console.log("adding to buffering logs...")
 			dbStore.addBufferingLogEntry({
