@@ -19,7 +19,7 @@ ffmpeg -listen 1 -i rtmp://0.0.0.0:1935/live/app \
     -c:a aac \
     -b:a 128k -ac 2 -ar 44100 \
     -map v:0 -s:v:1 1080x720 -b:v:1 2.6M \
-    -map v:0 -s:v:3 640x360  -b:v:3 365k \
+    -map v:0 -s:v:2 640x360  -b:v:2 365k \
     -map 0:a \
     -force_key_frames "expr:gte(t,n_forced*2)" \
     -sc_threshold 0 \
