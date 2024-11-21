@@ -1,6 +1,6 @@
 window.config = {
   serverURL: ":4443",
-  resolutions: { 3: "360p", 1: "720p", 0: "1080p" },
+  resolutions: { 1: "360p", 0: "720p" },
   throttleData: {
     209715200: "200Mb/s",
     67108864: "64Mb/s",
