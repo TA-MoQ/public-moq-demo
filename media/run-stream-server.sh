@@ -18,8 +18,8 @@ ffmpeg -listen 1 -i rtmp://0.0.0.0:1935/live/app \
     -preset veryfast -tune zerolatency \
     -c:a aac \
     -b:a 128k -ac 2 -ar 44100 \
-    -map v:0 -s:v:0 1080x720 -b:v:0 2.6M \
-    -map v:0 -s:v:1 640x360  -b:v:1 365k \
+    -map v:0 -filter:v:0 scale=-1:720 -b:v:0 2.6M \
+    -map v:0 -filter:v:1 scale=-1:360 -b:v:1 365k \
     -map 0:a \
     -force_key_frames "expr:gte(t,n_forced*2)" \
     -sc_threshold 0 \
