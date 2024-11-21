@@ -171,6 +171,7 @@ func (ms *MediaStream) chooseRepresentation(preferredId string) (choice *mpd.Rep
 	for _, r := range ms.reps {
 		if *r.ID == preferredId {
 			choice = r
+			break
 		} else if uint64(*r.Bandwidth) <= bitrate && (choice == nil || *r.Bandwidth > *choice.Bandwidth) {
 			choice = r
 		}
