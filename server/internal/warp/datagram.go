@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/TA-MoQ/webtransport-go"
 )
@@ -100,6 +101,7 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 				if err != nil {
 					return err
 				}
+				time.Sleep(500 * time.Microsecond)
 
 				d.mutex.Lock()
 				d.fragmentToSend -= 1
