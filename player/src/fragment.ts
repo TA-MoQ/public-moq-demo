@@ -65,7 +65,19 @@ export class FragmentedMessageHandler {
 
 			const raw = await r.peek(4)
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-			this.enqueueChunk(segmentID, await r.bytes(size), controller)
+			if (count < 2) { // init & styp
+				// controller.enqueue(await r.bytes(size))
+				this.enqueueChunk(segmentID, await r.bytes(size), controller)
+			} else if (count % 2 === 0) {
+				moof = await r.bytes(size)
+			} else if (count % 2 !== 0) {
+				const mdat = await r.bytes(size)
+				const chunk = new Uint8Array(moof.length + mdat.length)
+				chunk.set(moof)
+				chunk.set(mdat, moof.length)
+				// controller.enqueue(chunk)
+				this.enqueueChunk(segmentID, chunk, controller)
+			}
 			count++
 		}
 
