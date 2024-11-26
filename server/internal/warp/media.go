@@ -104,14 +104,12 @@ func NewMedia(playlistPath string, isStreaming bool) (m *Media, err error) {
 }
 
 func (m *Media) Start(bitrate func() uint64) (inits map[string]*MediaInit, audio *MediaStream, video *MediaStream, err error) {
-	start := time.Now()
-
-	audio, err = newMediaStream(m, m.audio, start, bitrate)
+	audio, err = newMediaStream(m, m.audio, bitrate)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	video, err = newMediaStream(m, m.video, start, bitrate)
+	video, err = newMediaStream(m, m.video, bitrate)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -136,6 +134,8 @@ func findLatestSequence(dir fs.FS) (int, error) {
 	return largest, nil
 }
 
+var DEFAULT_START_TIME = time.Time{}
+
 type MediaStream struct {
 	Media *Media
 
@@ -146,11 +146,11 @@ type MediaStream struct {
 	bitrate      func() uint64 // returns the current estimated bitrate
 }
 
-func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitrate func() uint64) (ms *MediaStream, err error) {
+func newMediaStream(m *Media, reps []*mpd.Representation, bitrate func() uint64) (ms *MediaStream, err error) {
 	ms = new(MediaStream)
 	ms.Media = m
 	ms.reps = reps
-	ms.start = start
+	ms.start = DEFAULT_START_TIME
 	ms.bitrate = bitrate
 	ms.streamOffset = -1
 	if m.isStreaming {
@@ -158,7 +158,7 @@ func newMediaStream(m *Media, reps []*mpd.Representation, start time.Time, bitra
 		if err != nil {
 			fmt.Println("WARN: Cannot find latest sequence, defaulting to 1")
 		} else {
-			ms.sequence = max(latestSequence-1, 1)
+			ms.sequence = max(latestSequence+1, 1)
 		}
 	}
 	return ms, nil
@@ -361,8 +361,9 @@ func (ms *MediaSegment) Read(ctx context.Context) (chunk []byte, err error) {
 
 	if sample != nil {
 		// Only running once, set initial stream offset
-		if ms.Stream.Media.isStreaming && ms.Stream.streamOffset == -1 {
+		if ms.Stream.Media.isStreaming && ms.Stream.streamOffset == -1 && ms.Stream.start == DEFAULT_START_TIME {
 			ms.Stream.streamOffset = sample.Timestamp
+			ms.Stream.start = time.Now()
 		}
 
 		offset := 0 * time.Nanosecond
