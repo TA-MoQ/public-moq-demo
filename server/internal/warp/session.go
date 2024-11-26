@@ -447,8 +447,14 @@ func (s *Session) writeSegmentHybrid(ctx context.Context, segment *MediaSegment)
 		return fmt.Errorf("failed to close segemnt stream: %w", err)
 	}
 
+	expectedFragments := (segment_size + 1249) / 1250
 	// Wait until datagram has finished working
-	<-datagram.finished
+	select {
+	case <-datagram.finished:
+		// no need to do anything
+	case <-time.After(time.Duration(expectedFragments+40) * time.Millisecond):
+		fmt.Println("[WARN] datagram seems to never finish, stuck? going through anyway")
+	}
 
 	err = datagram.Close()
 	if err != nil {
@@ -568,8 +574,14 @@ func (s *Session) writeSegmentDatagram(ctx context.Context, segment *MediaSegmen
 	fmt.Printf("* id: %s ts: %d etp: %d segment size: %d box count:%d chunk count: %d\n", init_message.Segment.Init, init_message.Segment.Timestamp, init_message.Segment.ETP, segment_size, box_count, chunk_count)
 	//logtoCSV("DATAGRAM", init_message.Segment.Timestamp, segment_size, s.inner.LocalAddr().String(), s.inner.RemoteAddr().String(), s.isAuto)
 
+	expectedFragments := (segment_size + 1249) / 1250
 	// Wait until datagram has finished working
-	<-datagram.finished
+	select {
+	case <-datagram.finished:
+		// no need to do anything
+	case <-time.After(time.Duration(expectedFragments+40) * time.Millisecond):
+		fmt.Println("[WARN] datagram seems to never finish, stuck? going through anyway")
+	}
 
 	err = datagram.Close()
 	if err != nil {
