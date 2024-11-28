@@ -18,6 +18,7 @@ export class FragmentedMessageHandler {
 	private chunkCount: Map<string, number>;
 	private chunkTotal: Map<string, number>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
+	private segmentInitialized: Map<string, boolean>;
 
 	constructor() {
 		this.fragmentBuffers = new Map();
@@ -25,6 +26,7 @@ export class FragmentedMessageHandler {
 		this.chunkCount = new Map();
 		this.chunkTotal = new Map();
 		this.segmentStreams = new Map();
+		this.segmentInitialized = new Map();
 	}
 
 	// warp, styp, moof & mdat (I-frame)
@@ -67,7 +69,8 @@ export class FragmentedMessageHandler {
 			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
 			if (count < 2) { // init & styp
 				// controller.enqueue(await r.bytes(size))
-				this.enqueueChunk(segmentID, await r.bytes(size), controller)
+				this.enqueueChunk(segmentID, await r.bytes(size), controller, true)
+				this.segmentInitialized.set(segmentID, true)
 			} else if (count % 2 === 0) {
 				moof = await r.bytes(size)
 			} else if (count % 2 !== 0) {
@@ -180,7 +183,7 @@ export class FragmentedMessageHandler {
 		const chunkBuffers = this.chunkBuffers.get(segmentId)
 		if (!chunkBuffers) return;
 
-		chunkBuffers.push([chunkNumber, completeData]);
+		this.enqueueChunk(segmentId, completeData, this.segmentStreams.get(segmentId)!);
 		this.fragmentBuffers.delete(chunkId);
 	}
 
@@ -242,7 +245,8 @@ export class FragmentedMessageHandler {
 		const chunkBuffers = this.chunkBuffers.get(segmentId)
 		if (!chunkBuffers) return;
 
-		chunkBuffers.push([chunkNumber, new Uint8Array(actualCompleteData)]);
+		this.enqueueChunk(segmentId, new Uint8Array(actualCompleteData), this.segmentStreams.get(segmentId)!);
+		this.fragmentBuffers.delete(chunkId);
 	}
 
 	private flushChunks(segmentId: string) {
@@ -252,24 +256,24 @@ export class FragmentedMessageHandler {
 			unfinishedChunkCount++
 			const arr = this.fragmentBuffers.get(chunkId)!
 			const totalNulls = arr.filter((x) => x == null).length
-			console.warn("Found unfinished chunk with ID:", chunkId, `(${totalNulls}/${arr.length} fragment missing)`)
+			console.warn("Found unfinished chunk with ID:", chunkId, `(${totalNulls}/${arr.length} fragment missing) at indexes ${arr.map((x, i) => x == null ? i : -1).filter((x) => x != -1)}`)
 
 			const chunkNumber = Number(chunkId.split("-")[1])
 			this.writeUnfinishedFragment(chunkId, segmentId, chunkNumber)
 		})
-		console.warn(`Total unfinished chunks: ${unfinishedChunkCount}`)
 
-		const bufs = this.chunkBuffers.get(segmentId)
-		const controller = this.segmentStreams.get(segmentId);
-		if (!bufs || !controller) return
-
-		console.warn(`Flushing ${bufs.length} chunks`)
-		bufs.sort((a, b) => a[0] - b[0]).forEach(([_, data]) => this.enqueueChunk(segmentId, data, controller))
 		this.chunkBuffers.delete(segmentId)
 	}
 	
 
-	private enqueueChunk(segmentID: string, chunk: Uint8Array | undefined, controller: ReadableStreamDefaultController<Uint8Array>) {
+	private enqueueChunk(segmentID: string, chunk: Uint8Array | undefined, controller: ReadableStreamDefaultController<Uint8Array>, initializer: boolean = false) {
+		const t = performance.now()
+		while (!this.segmentInitialized.get(segmentID) && !initializer) {
+			if (performance.now() - t > 1000) {
+				return
+			}
+		}
+
 		if (chunk === undefined) {
 			return
 		}
@@ -310,9 +314,11 @@ export class FragmentedMessageHandler {
 
 	private cleanup(segmentID: string) {
 		this.flushChunks(segmentID);
-		this.segmentStreams.get(segmentID)?.close();
-		this.segmentStreams.delete(segmentID);
-		this.chunkBuffers.delete(segmentID);
+		setTimeout(() => {
+			this.segmentStreams.get(segmentID)?.close()
+			this.segmentStreams.delete(segmentID);
+			this.chunkBuffers.delete(segmentID);
+		}, 1000)
 		// console.log("DELETE ", segmentID)
 	}
 
