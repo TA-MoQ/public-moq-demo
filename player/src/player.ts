@@ -856,7 +856,6 @@ export class Player {
 
 		const segment = new Segment(track.source, init, msg.timestamp)
 		// The track is responsible for flushing the segments in order
-		track.add(segment)
 
 		/* TODO I'm not actually sure why this code doesn't work; something trips up the MP4 parser
 			while (1) {
@@ -899,6 +898,7 @@ export class Player {
 			const atom = await stream.bytes(size)
 			segment.push(atom)
 			segment.flush()
+			track.add(segment)
 			// track.flush() // Flushes if the active segment has new samples
 
 			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
@@ -1450,6 +1450,12 @@ export class Player {
 			this.visualizeBuffer(videoBufContainer, videoBufferDurationEl, 'video', ranges)
 		}
 
+		const htmlBufContainer = this.statsRef.querySelector('.html.buffer') as HTMLElement;
+		const htmlBufferDurationEl = this.statsRef.querySelector('.html.label>.seconds') as HTMLElement;
+		if (htmlBufContainer) {
+			this.visualizeBuffer(htmlBufContainer, htmlBufferDurationEl, 'video', this.vidRef.buffered)
+		}
+
 		const bw = document.querySelector('#stats .server_bw') as HTMLDivElement;
 		const bw_swma_threshold = document.querySelector('#stats .swma_threshold') as HTMLDivElement;
 		const chunk_throughput = document.querySelector('#stats .chunk_throughput') as HTMLDivElement;
@@ -1572,6 +1578,7 @@ export class Player {
             let end = ranges.end(i) - this.vidRef.currentTime
 
             if (end < 0 || start > max) {
+								bufferFiller.setAttribute('style', "display: none")
                 continue
             }
             this.bufferLevel.set(bufferType, end);
