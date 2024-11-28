@@ -86,6 +86,10 @@ func (d *Datagram) Run(ctx context.Context) (err error) {
 			if chunkLength%d.maxSize != 0 {
 				totalFragments++
 			}
+			
+			d.inner.SendDatagram([]byte("WARPTESTthisisjustgarbagedatatotestonwhetherornotfirstpacketisalwaysdropped")) // dummy to make sure the client is ready
+			d.inner.SendDatagram([]byte("WARPTESTthisisjustgarbagedatatotestonwhetherornotfirstpacketisalwaysdropped")) // dummy to make sure the client is ready
+
 			// TODO: make sure totalFragments <  65,535
 			for i := 0; i < totalFragments; i++ {
 				start := i * d.maxSize

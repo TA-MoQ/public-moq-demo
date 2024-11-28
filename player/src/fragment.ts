@@ -105,6 +105,12 @@ export class FragmentedMessageHandler {
 	}
 
 	async handleDatagram(datagram: Uint8Array, player: Player) {
+		// check if datagram first 8 bytes are "WARPTEST", if yes, return
+		const warpTest = new TextDecoder().decode(datagram.slice(0, 8));
+		if (warpTest === "WARPTEST") {
+			return;
+		}
+
 		const fragment = this.parseDatagram(datagram);
 			
 		if (!this.segmentStreams.has(fragment.segmentID)) {
