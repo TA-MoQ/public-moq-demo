@@ -644,9 +644,21 @@ export class Player {
 		this.vidRef.play();
 	}
 
+	isInNoDataRange(currentTime: number) {
+		const ranges = this.vidRef.buffered
+		for (let i = 0; i < ranges.length; i += 1) {
+			const start = ranges.start(i)
+			const end = ranges.end(i)
+			if (currentTime >= start && currentTime <= end) {
+				return false
+			}
+		}
+		return true
+	}
+
 	// Try seeking ahead to the next buffered range if there's a gap
 	trySeek() {
-		if (this.vidRef.readyState > 2) { // HAVE_CURRENT_DATA
+		if (this.vidRef.readyState > 2 && !this.isInNoDataRange(this.vidRef.currentTime)) { // HAVE_CURRENT_DATA
 			// No need to seek
 			return
 		}
