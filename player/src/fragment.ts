@@ -132,7 +132,6 @@ export class FragmentedMessageHandler {
 	}
 
 	private storeFragment(fragment: MessageFragment) {
-		console.log("[STORE] Fragment:", fragment)
 		if (!this.chunkBuffers.has(fragment.segmentID)) {
 			this.chunkBuffers.set(fragment.segmentID, [])
 		}
@@ -185,6 +184,67 @@ export class FragmentedMessageHandler {
 		this.fragmentBuffers.delete(chunkId);
 	}
 
+	private writeUnfinishedFragment(chunkId: string, segmentId: string, chunkNumber: number) {
+		const fragmentBuffer = this.fragmentBuffers.get(chunkId)
+		if (!fragmentBuffer) return
+
+		const idx = fragmentBuffer.indexOf(null)
+		const cleanedBuf = fragmentBuffer.slice(0, idx) as Uint8Array[]
+		const totalLength = cleanedBuf.reduce((acc, val) => acc + val.length, 0);
+		const completeData = new Uint8Array(totalLength);
+
+		// Copy each Uint8Array into completeData
+		let offset = 0;
+		cleanedBuf.forEach((chunk) => {
+			completeData.set(chunk, offset);
+			offset += chunk.length;
+		});
+
+		const mdatIndex = new TextDecoder().decode(completeData).indexOf('mdat');
+		if (mdatIndex == -1 || mdatIndex <= 4) {
+			console.error(`'mdat' atom not found or in an unexpected location in fragment 0 for chunkID: ${chunkId}`);
+			return false; // Ensure 'mdat' is present and correctly positioned
+		}
+
+		const dv = new DataView(completeData.buffer)
+		let mdatSize = -1;
+		const sizeStartIndex = mdatIndex - 4;
+		if (mdatIndex > 4) {
+			mdatSize = dv.getUint32(sizeStartIndex);
+			if (mdatSize === -1) {
+				console.error(`Invalid or missing 'mdat' atom size in fragment 0 for chunkID: ${chunkId}`);
+				return false; // Return false if the size is not properly set
+			}
+			mdatSize -= completeData.length - sizeStartIndex
+		}
+
+		console.log(`[UNFRAG] Found 'mdat' atom with size ${mdatSize} in fragment 0 for chunkID: ${chunkId}`);
+		console.log("[UNFRAG] Start parsing NAL Units")
+		let currentNalIdx = mdatIndex + 4
+		while (currentNalIdx < completeData.length) {
+			const length = dv.getUint32(currentNalIdx)
+			if (currentNalIdx + length + 4 >= completeData.length) {
+				break
+			}
+
+			currentNalIdx = currentNalIdx + length + 4
+		}
+		console.log("[UNFRAG] Final idx is " + currentNalIdx)
+		if (currentNalIdx == mdatIndex + 4) return;
+		console.log("[UNFRAG] Final size is " + (currentNalIdx - mdatIndex))
+
+		dv.setUint32(sizeStartIndex, currentNalIdx - mdatIndex);
+		const actualCompleteData = dv.buffer.slice(0, currentNalIdx)
+		if (!this.chunkBuffers.has(segmentId)) {
+			this.chunkBuffers.set(segmentId, [])
+		}
+		
+		const chunkBuffers = this.chunkBuffers.get(segmentId)
+		if (!chunkBuffers) return;
+
+		chunkBuffers.push([chunkNumber, new Uint8Array(actualCompleteData)]);
+	}
+
 	private flushChunks(segmentId: string) {
 		const unfinishedFragments = Array.from(this.fragmentBuffers.keys()).filter((x) => x.startsWith(segmentId))
 		let unfinishedChunkCount = 0
@@ -193,6 +253,9 @@ export class FragmentedMessageHandler {
 			const arr = this.fragmentBuffers.get(chunkId)!
 			const totalNulls = arr.filter((x) => x == null).length
 			console.warn("Found unfinished chunk with ID:", chunkId, `(${totalNulls}/${arr.length} fragment missing)`)
+
+			const chunkNumber = Number(chunkId.split("-")[1])
+			this.writeUnfinishedFragment(chunkId, segmentId, chunkNumber)
 		})
 		console.warn(`Total unfinished chunks: ${unfinishedChunkCount}`)
 
