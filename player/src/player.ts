@@ -897,130 +897,134 @@ export class Player {
 		let lastMoofDifferenceTime = 0;
 		// One day I'll figure it out; until then read one top-level atom at a time
 		let count = 1
-		while (true) {
-			if (await stream.done()) {
-				break;
-			}
-
-			const boxStartOffset = performance.now();
-			boxStartTime = boxStartOffset.toFixed(2);
-			const raw = await stream.peek(4)
-			const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
-			// console.log(size)
-			const atom = await stream.bytes(size)
-			segment.push(atom)
-			segment.flush()
-			track.add(segment)
-			// track.flush() // Flushes if the active segment has new samples
-
-			// boxes: [moof][mdat]...<idle time>...[moof][mdat]
-			// first 4 bytes => size
-			// following 4 bytes => box type
-			const boxType = fromCharCodeUint8([...atom.slice(4, 8)]);
-			
-			if (isVideoSegment) {
-				if (boxType === 'moof') {
-					chunkCounter++;
-					lastMoofSize = size;
-					lastMoofDifferenceTime = boxStartOffset - lastMoofStartTime;
-					lastMoofStartTime = boxStartOffset;
-					lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
-					lastMoofClockTime = Date.now();
-					moofClockTime = performance.now();
-
-					chunkLatencies.push(lastMoofDifferenceTime);
-					if (chunkLatencies.length > 1) {
-						let endPos = chunkLatencies.length-1;
-						let jitter = chunkLatencies[endPos] - chunkLatencies[endPos - 1]
-						if (jitter < 0 ){
-						jitter = 0	
-						}
-						chunkJitters.push(jitter)
-						// let latency = Math.abs(chunkLatencies[lastData] - chunkLatencies[lastData - 1]);
-						// this.latencyData.push(latency)
-						// console.log(latency, "LATENCY")	
-						//SWMA Latency
-						let windowStart = Math.max(0, chunkLatencies.length - this.windowSize);
-						let windowData = chunkLatencies.slice(windowStart)
-						let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
-						this.throughputs.set('SWMALatency', windowSum/windowData.length);
-					}
-				} else if (boxType === 'mdat') {
-					const chunkDownloadDuration = performance.now() - boxStartOffset;
-					const chunkSize = size + lastMoofSize; // bytes
-					// const chunkDownloadSpeed = chunkSize * 8 / chunkDownloadDuration; // bits per second
-					// const chunkDownloadSpeedInMbps = chunkDownloadSpeed / 1000000;
-					// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
-					// console.log("CHUNK SIZE", chunkSize)
-					// console.log("CHUNK DOWNLOAD SPEED", chunkDownloadSpeed)
-					// console.log("CHUNK DOWNLOAD SPEED IN MBPS", chunkDownloadSpeedInMbps)
-					totalChunkSize += chunkSize;
-					// const chunkLatency = Math.round(lastMoofClockTime - msg.at);
-					const chunkLatency = lastMoofClockTime
-					if (chunkCounter === 1) {
-						console.log("LATENCY", chunkCounter, chunkLatency, chunkSize)
-					}
-					chunkEnd = performance.now() - moofClockTime;
-					++this.totalChunkCount;
-
-					dbStore.addLogEntry({
-						testId: this.testId,
-						segmentId: msg.init,
-						address: this.ipaddr,
-						no: chunkCounter,
-						chunkSize,
-						chunkDownloadDuration,
-						lastMoofDownloadDuration,
-						boxStartTime,
-						chunkEnd,
-						chunkLatency,
-						msg_timestamp: msg.timestamp,
-						msg_at: msg.at,
-						msg_etp: msg.etp,
-						msg_tc_rate: msg.tc_rate,
-						// msg_representation: msg.representation,
-						perf_now: performance.now().toFixed(2),
-						timestamp: Date.now()
-					});
-					
-
-					const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
-					this.chunkStats.push(stat);
-					// chunkLatencies.push(chunkLatency);
-					// if (chunkLatencies.length > 1) {
-					// 	let lastData = chunkLatencies.length-1;
-					// 	let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
-					// 	this.latencyData.push(latency)
-					// 	// console.log(latency, "LATENCY")
-					// 	//SWMA Latency
-					// 	let windowStart = Math.max(0, this.latencyData.length - 25);
-					// 	let windowData = this.latencyData.slice(windowStart)
-					// 	let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
-					// 	this.throughputs.set('SWMALatency', windowSum/windowData.length);
-					// }
-					// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
-					// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
-					// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
-					// 	const tput = this.computeTPut(filteredStats);
-					// 	if (tput > 0) {
-					// 		this.throughputs.set('swma', tput);
-					// 	} else {
-					// 		console.warn('tput is zero.');
-					// 	}
-
+		try {
+			while (true) {
+				if (await stream.done()) {
+					break;
 				}
-				count++
+
+				const boxStartOffset = performance.now();
+				boxStartTime = boxStartOffset.toFixed(2);
+				const raw = await stream.peek(4)
+				const size = new DataView(raw.buffer, raw.byteOffset, raw.byteLength).getUint32(0)
+				// console.log(size)
+				const atom = await stream.bytes(size)
+				segment.push(atom)
+				segment.flush()
+				track.add(segment)
+				// track.flush() // Flushes if the active segment has new samples
+
+				// boxes: [moof][mdat]...<idle time>...[moof][mdat]
+				// first 4 bytes => size
+				// following 4 bytes => box type
+				const boxType = fromCharCodeUint8([...atom.slice(4, 8)]);
+				
+				if (isVideoSegment) {
+					if (boxType === 'moof') {
+						chunkCounter++;
+						lastMoofSize = size;
+						lastMoofDifferenceTime = boxStartOffset - lastMoofStartTime;
+						lastMoofStartTime = boxStartOffset;
+						lastMoofDownloadDuration = performance.now() - lastMoofStartTime;
+						lastMoofClockTime = Date.now();
+						moofClockTime = performance.now();
+
+						chunkLatencies.push(lastMoofDifferenceTime);
+						if (chunkLatencies.length > 1) {
+							let endPos = chunkLatencies.length-1;
+							let jitter = chunkLatencies[endPos] - chunkLatencies[endPos - 1]
+							if (jitter < 0 ){
+							jitter = 0	
+							}
+							chunkJitters.push(jitter)
+							// let latency = Math.abs(chunkLatencies[lastData] - chunkLatencies[lastData - 1]);
+							// this.latencyData.push(latency)
+							// console.log(latency, "LATENCY")	
+							//SWMA Latency
+							let windowStart = Math.max(0, chunkLatencies.length - this.windowSize);
+							let windowData = chunkLatencies.slice(windowStart)
+							let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
+							this.throughputs.set('SWMALatency', windowSum/windowData.length);
+						}
+					} else if (boxType === 'mdat') {
+						const chunkDownloadDuration = performance.now() - boxStartOffset;
+						const chunkSize = size + lastMoofSize; // bytes
+						// const chunkDownloadSpeed = chunkSize * 8 / chunkDownloadDuration; // bits per second
+						// const chunkDownloadSpeedInMbps = chunkDownloadSpeed / 1000000;
+						// console.log("TIME TO DOWNLOAD 1 MOOF MDAT CHUNK ", chunkDownloadDuration)
+						// console.log("CHUNK SIZE", chunkSize)
+						// console.log("CHUNK DOWNLOAD SPEED", chunkDownloadSpeed)
+						// console.log("CHUNK DOWNLOAD SPEED IN MBPS", chunkDownloadSpeedInMbps)
+						totalChunkSize += chunkSize;
+						// const chunkLatency = Math.round(lastMoofClockTime - msg.at);
+						const chunkLatency = lastMoofClockTime
+						if (chunkCounter === 1) {
+							console.log("LATENCY", chunkCounter, chunkLatency, chunkSize)
+						}
+						chunkEnd = performance.now() - moofClockTime;
+						++this.totalChunkCount;
+
+						dbStore.addLogEntry({
+							testId: this.testId,
+							segmentId: msg.init,
+							address: this.ipaddr,
+							no: chunkCounter,
+							chunkSize,
+							chunkDownloadDuration,
+							lastMoofDownloadDuration,
+							boxStartTime,
+							chunkEnd,
+							chunkLatency,
+							msg_timestamp: msg.timestamp,
+							msg_at: msg.at,
+							msg_etp: msg.etp,
+							msg_tc_rate: msg.tc_rate,
+							// msg_representation: msg.representation,
+							perf_now: performance.now().toFixed(2),
+							timestamp: Date.now()
+						});
+						
+
+						const stat = [chunkCounter, chunkSize, chunkDownloadDuration, lastMoofDownloadDuration, chunkDownloadDuration > 0 ? (chunkSize * 8 * 1000 / chunkDownloadDuration) : 0, chunkLatency, msg.timestamp];
+						this.chunkStats.push(stat);
+						// chunkLatencies.push(chunkLatency);
+						// if (chunkLatencies.length > 1) {
+						// 	let lastData = chunkLatencies.length-1;
+						// 	let latency = chunkLatencies[lastData] - chunkLatencies[lastData - 1];
+						// 	this.latencyData.push(latency)
+						// 	// console.log(latency, "LATENCY")
+						// 	//SWMA Latency
+						// 	let windowStart = Math.max(0, this.latencyData.length - 25);
+						// 	let windowData = this.latencyData.slice(windowStart)
+						// 	let windowSum = windowData.reduce((acc, val)=> acc + val, 0);
+						// 	this.throughputs.set('SWMALatency', windowSum/windowData.length);
+						// }
+						// if (this.totalChunkCount >= this.getSWMAWindowSize() && this.totalChunkCount % this.getSWMACalculationInterval() === 0) {
+						// 	const stats = this.chunkStats.slice(-this.getSWMAWindowSize());
+						// 	let filteredStats: any[] = this.filterStats(stats, this.getSWMAThreshold(), this.getSWMAThresholdType(), this.throughputs.get('swma') || 0);
+						// 	const tput = this.computeTPut(filteredStats);
+						// 	if (tput > 0) {
+						// 		this.throughputs.set('swma', tput);
+						// 	} else {
+						// 		console.warn('tput is zero.');
+						// 	}
+
+					}
+					count++
+				}
+				
+				totalSegmentSize += size;
+				this.totalSizeProcessed += size;
+				// console.log(count, "TOTAL MOOF/MDAT COUNT")
+				// console.log("total segment size", totalSegmentSize)
+				//ComputeSegmentThroughput
+				const segmentTPut = this.computeSegmentTPut(this.totalSizeProcessed, performance.now());
+				if (segmentTPut > 0) {
+					this.throughputs.set('chunk', segmentTPut);
+				}
 			}
-			
-			totalSegmentSize += size;
-			this.totalSizeProcessed += size;
-			// console.log(count, "TOTAL MOOF/MDAT COUNT")
-			// console.log("total segment size", totalSegmentSize)
-			//ComputeSegmentThroughput
-			const segmentTPut = this.computeSegmentTPut(this.totalSizeProcessed, performance.now());
-			if (segmentTPut > 0) {
-				this.throughputs.set('chunk', segmentTPut);
-			}
+		} catch (e) {
+			console.error("Error happened!", e)
 		}
 		// console.log("msg", msg)
 		// console.log("total segment size", totalSegmentSize)
