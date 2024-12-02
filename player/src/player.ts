@@ -75,8 +75,8 @@ export class Player {
 	latestBufferedEnd: number;
 	bufferTimeRef: number;
 	bufferingStartTime: number | null;
-	totalBufferingDurationFromEvent: number;
-	totalBufferingCountFromEvent: number;
+	totalPlayerStallDuration: number;
+	totalPlayerStallCount: number;
 
 	waitingTimeout: NodeJS.Timeout | null = null;
 	constructor(props: any) {
@@ -101,8 +101,8 @@ export class Player {
 		this.latestBufferedEnd = 0;
 		this.bufferTimeRef = -1;
 		this.bufferingStartTime = null;
-		this.totalBufferingDurationFromEvent = 0;
-		this.totalBufferingCountFromEvent = 0;
+		this.totalPlayerStallDuration = 0;
+		this.totalPlayerStallCount = 0;
 
 		this.logFunc = props.logger;
 		this.testId = this.createTestId();
@@ -202,7 +202,7 @@ export class Player {
 		this.vidRef.addEventListener("waiting", () => {
 			if (this.bufferingStartTime === null) {
 				this.bufferingStartTime = performance.now();
-				this.totalBufferingCountFromEvent++;
+				this.totalPlayerStallCount++;
 				console.log("[BUFFERING] Player is waiting...");
 
 				this.waitingTimeout = setTimeout(() => {
@@ -217,7 +217,7 @@ export class Player {
 		this.vidRef.addEventListener("stalled", () => {
 			if (this.bufferingStartTime === null) {
 				this.bufferingStartTime = performance.now();
-				this.totalBufferingCountFromEvent++;
+				this.totalPlayerStallCount++;
 				console.log("[BUFFERING] Player is stalled...");
 
 				this.waitingTimeout = setTimeout(() => {
@@ -232,7 +232,7 @@ export class Player {
 		this.vidRef.addEventListener("playing", () => {
 			if (this.bufferingStartTime !== null) {
 				const bufferingDuration = performance.now() - this.bufferingStartTime;
-				this.totalBufferingDurationFromEvent += bufferingDuration / 1000;
+				this.totalPlayerStallDuration += bufferingDuration / 1000;
 				this.bufferingStartTime = null;
 				console.log(`[BUFFERING] Buffering ended (playing). Duration: ${bufferingDuration.toFixed(2)} ms`);
 
@@ -245,7 +245,7 @@ export class Player {
 		this.vidRef.addEventListener("canplay", () => {
 			if (this.bufferingStartTime !== null) {
 				const bufferingDuration = performance.now() - this.bufferingStartTime;
-				this.totalBufferingDurationFromEvent += bufferingDuration / 1000;
+				this.totalPlayerStallDuration += bufferingDuration / 1000;
 				this.bufferingStartTime = null;
 				console.log(`[BUFFERING] Buffering ended (can play). Duration: ${bufferingDuration.toFixed(2)} ms`);
 
@@ -1263,8 +1263,8 @@ export class Player {
 			Total Buffering Count: ${this.totalBufferingCount}
 			Total Buffering Duration: ${this.totalBufferingDuration}
 			Total Rebuffering Ratio: ${this.totalBufferingDuration / latestBufferedTime}
-			Buffering Duration From Event Listener: ${this.totalBufferingDurationFromEvent}
-			Rebuffering Ratio From Event Listener: ${this.totalBufferingDurationFromEvent / elapsedTime}
+			Buffering Duration From Event Listener: ${this.totalPlayerStallDuration}
+			Rebuffering Ratio From Event Listener: ${this.totalPlayerStallDuration / elapsedTime}
 			=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=`);
 			// console.log("adding to buffering logs...")
 			dbStore.addBufferingLogEntry({
@@ -1292,6 +1292,8 @@ export class Player {
 				overallBufferingCount: this.totalBufferingCount,
 				overallBufferingDuration: this.totalBufferingDuration,
 				overallRebufferingRatio: this.totalBufferingDuration / latestBufferedTime,
+				totalPlayerStallCount: this.totalPlayerStallCount,
+				totalPlayerStallDuration: this.totalPlayerStallDuration
 			});
 		}
 		
