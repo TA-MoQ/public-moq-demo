@@ -1,6 +1,7 @@
 import { Player } from "./player";
 import { IQueue, Queue } from "./queue";
 import { StreamReader, StreamWriter } from "./stream"
+import { Mutex } from 'async-mutex'
 
 type MessageFragment = {
 	segmentID: string;
@@ -19,6 +20,7 @@ export class FragmentedMessageHandler {
 	private chunkTotal: Map<string, number>;
 	private segmentStreams: Map<string, ReadableStreamDefaultController<Uint8Array>>;
 	private segmentInitialized: Map<string, boolean>;
+	private mutex: Mutex;
 
 	constructor() {
 		this.fragmentBuffers = new Map();
@@ -27,6 +29,7 @@ export class FragmentedMessageHandler {
 		this.chunkTotal = new Map();
 		this.segmentStreams = new Map();
 		this.segmentInitialized = new Map();
+		this.mutex = new Mutex()
 	}
 
 	// warp, styp, moof & mdat (I-frame)
@@ -118,7 +121,7 @@ export class FragmentedMessageHandler {
 			this.initializeStream(fragment.segmentID, player);
 		}
 
-		this.storeFragment(fragment);
+		this.mutex.runExclusive(() => this.storeFragment(fragment))
 	}
 
 	async closeSegment(segmentId: string) {
