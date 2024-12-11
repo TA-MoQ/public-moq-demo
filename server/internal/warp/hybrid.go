@@ -19,7 +19,7 @@ func NewHybrid(stream *Stream, datagram *Datagram, server *Server) Hybrid {
 }
 
 func (h *Hybrid) Write(buf []byte) (n int, err error) {
-	expectedFragments := (len(buf) + 1249) / 1250 // ceil(len(buf) / 1250)
+	expectedFragments := (len(buf) + h.datagram.maxSize - 1) / h.datagram.maxSize
 	threshold := 25
 	if (expectedFragments + h.datagram.fragmentToSend) > threshold {
 		return h.stream.Write(buf)
